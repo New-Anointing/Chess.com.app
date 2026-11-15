@@ -98,8 +98,9 @@
     };
   }
 
-  function chooseMove(g, elo) {
+  function chooseMove(g, elo, maxTime) {
     const sk = skill(elo);
+    if (maxTime != null) sk.time = Math.max(60, Math.min(sk.time, maxTime));
     const legal = g.moves();
     if (legal.length === 1) return legal[0];
     if (Math.random() < sk.blunder) return legal[Math.floor(Math.random() * legal.length)];

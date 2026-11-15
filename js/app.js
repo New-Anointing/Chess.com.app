@@ -10,10 +10,78 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmtEval = s => AI.isMate(s) ? `M${Math.abs(AI.mateIn(s))}` : (s > 0 ? '+' : '') + (s / 100).toFixed(1);
 
+  const VALS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+  const TCS = [
+    { id: 'none', label: '∞ No timer', base: 0, inc: 0 }, { id: '1', label: '⚡ 1 min', base: 60, inc: 0 },
+    { id: '3|2', label: '⚡ 3 | 2', base: 180, inc: 2 }, { id: '5', label: '⏱ 5 min', base: 300, inc: 0 },
+    { id: '10', label: '⏱ 10 min', base: 600, inc: 0 }, { id: '30', label: '🕰 30 min', base: 1800, inc: 0 }];
+  let tcId = 'none';
+  try { tcId = localStorage.getItem('ca-tc') || 'none'; } catch (e) {}
+  const tcPicker = () => `<div class="seg wrap" id="tc">${TCS.map(t => `<button data-v="${t.id}" class="${t.id === tcId ? 'on' : ''}">${t.label}</button>`).join('')}</div>`;
+  function bindTc(root) {
+    root.querySelectorAll('#tc button').forEach(b => b.onclick = () => {
+      tcId = b.dataset.v; try { localStorage.setItem('ca-tc', tcId); } catch (e) {}
+      root.querySelectorAll('#tc button').forEach(x => x.classList.toggle('on', x === b));
+    });
+  }
+  const fmtClock = ms => {
+    ms = Math.max(0, ms); const s = ms / 1000;
+    if (s < 10) return s.toFixed(1);
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  };
+  // Pieces `color` has captured, plus material lead.
+  function captured(board, color) {
+    const start = { p: 8, n: 2, b: 2, r: 2, q: 1 }, mine = {}, theirs = {};
+    let my = 0, th = 0;
+    for (const p of board) {
+      if (!p || p === 'k' || p === 'K') continue;
+      const t = p.toLowerCase(), own = (p < 'a') === (color === 'w');
+      if (own) { mine[t] = (mine[t] || 0) + 1; my += VALS[t]; } else { theirs[t] = (theirs[t] || 0) + 1; th += VALS[t]; }
+    }
+    const list = [];
+    for (const t of ['q', 'r', 'b', 'n', 'p']) for (let i = 0; i < Math.max(0, start[t] - (theirs[t] || 0)); i++) list.push(t);
+    const pts = list.reduce((a, t) => a + VALS[t], 0);
+    const glyph = t => GLYPH[color === 'w' ? t : t.toUpperCase()];
+    return `<span class="caps" title="${pts} points captured">${list.map(t => `<i>${glyph(t)}</i>`).join('')}${pts ? `<em>${pts} pts</em>` : ''}${my > th ? `<b>+${my - th}</b>` : ''}</span>`;
+  }
+  function animateMove(m, flip) {
+    if (!m) return;
+    const board = app.querySelector('.board'); if (!board || !board.animate) return;
+    const size = board.clientWidth / 8, pos = s => { const v = flip ? 63 - s : s; return [v & 7, v >> 3]; };
+    const slide = (from, to) => {
+      const el = board.querySelector(`[data-sq="${to}"] .pc`); if (!el) return;
+      const [fx, fy] = pos(from), [tx, ty] = pos(to);
+      el.animate([{ transform: `translate(${(fx - tx) * size}px,${(fy - ty) * size}px)` }, { transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    };
+    slide(m.from, m.to);
+    const pc = board.querySelector(`[data-sq="${m.to}"] .pc`);
+    if (pc && /♔|♚/.test(pc.textContent) && Math.abs((m.to & 7) - (m.from & 7)) === 2) {
+      if (m.to > m.from) slide(m.to + 1, m.to - 1); else slide(m.to - 2, m.to + 1);
+    }
+    const toSq = board.querySelector(`[data-sq="${m.to}"]`); toSq && toSq.classList.add('landed');
+  }
+  // Keep the current move visible inside the move list without scrolling the page.
+  function scrollMoves(box, el) {
+    if (!box) return;
+    if (!el) { box.scrollTop = box.scrollHeight; box.scrollLeft = box.scrollWidth; return; }
+    box.scrollLeft = el.offsetLeft - box.clientWidth / 2 + el.offsetWidth / 2;
+    box.scrollTop = el.offsetTop - box.clientHeight / 2;
+  }
+  function confetti() {
+    const cols = ['#81b64c', '#f7c045', '#7aa7ff', '#ff6b6b', '#c07aff', '#fff'];
+    for (let i = 0; i < 70; i++) {
+      const d = document.createElement('div'); d.className = 'confetti';
+      d.style.cssText = `left:${Math.random() * 100}vw;background:${cols[i % cols.length]};animation-delay:${Math.random() * .6}s;animation-duration:${1.8 + Math.random() * 1.6}s;transform:rotate(${Math.random() * 360}deg)`;
+      document.body.appendChild(d); setTimeout(() => d.remove(), 4200);
+    }
+  }
+  let clockTimer = null;
+
   // ---------- navigation ----------
   function nav(view) {
     R = null;
     window.scrollTo(0, 0);
+    app.classList.remove('enter'); void app.offsetWidth; app.classList.add('enter'); setTimeout(() => app.classList.remove('enter'), 700);
     document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     ({ home, league, quick, leaderboard, history })[view]();
   }
@@ -91,8 +159,14 @@
     const b = $('#playLeague'); if (b) b.onclick = playLeague;
   }
   function playLeague() {
-    const fx = League.nextFixture();
-    startGame({ bot: League.botById(fx.botId), color: fx.color, mode: 'league', rated: true });
+    const fx = League.nextFixture(), bot = League.botById(fx.botId);
+    modal(`<div class="vs"><span>🙂</span><b>VS</b><span>${bot.avatar}</span></div>
+      <h2>Round ${S.season.round + 1}: ${esc(bot.name)} <small class="muted">(${League.rating(bot.id)})</small></h2>
+      <p class="muted">You play ${fx.color === 'w' ? '♔ White' : '♚ Black'}</p>
+      <h4>Time control</h4>${tcPicker()}
+      <div class="row"><button class="btn primary" data-a="go">Start match</button><button class="btn" data-a="x">Cancel</button></div>`,
+      a => a === 'go' && startGame({ bot, color: fx.color, mode: 'league', rated: true, tc: tcId }));
+    bindTc(document.querySelector('.overlay'));
   }
 
   // ---------- quick match ----------
@@ -101,13 +175,15 @@
     app.innerHTML = `<section class="card"><h2>Quick match</h2>
       <div class="row"><label>Color</label><div class="seg" id="col"><button data-v="w" class="on">♔ White</button><button data-v="r">🎲 Random</button><button data-v="b">♚ Black</button></div>
       <label class="chk"><input type="checkbox" id="rated" checked> Rated</label></div>
+      <div class="row tcrow"><label>Time</label>${tcPicker()}</div>
       <div class="bots">${LEAGUES.map((L, li) => `<div class="botgrp"><h4 style="color:${L.color}">${L.icon} ${L.name}</h4>${BOTS.filter(b => b.league === li).map(b =>
         `<button class="bot ${b.id === sel ? 'on' : ''}" data-id="${b.id}"><span>${b.avatar}</span><b>${esc(b.name)}</b><small>${League.rating(b.id)}</small></button>`).join('')}</div>`).join('')}</div>
       <button class="btn primary big" id="start">Play</button></section>`;
     app.querySelectorAll('#col button').forEach(b => b.onclick = () => { color = b.dataset.v; app.querySelectorAll('#col button').forEach(x => x.classList.toggle('on', x === b)); });
     app.querySelectorAll('.bot').forEach(b => b.onclick = () => { sel = b.dataset.id; app.querySelectorAll('.bot').forEach(x => x.classList.toggle('on', x === b)); });
+    bindTc(app);
     $('#rated').onchange = e => rated = e.target.checked;
-    $('#start').onclick = () => startGame({ bot: League.botById(sel), color: color === 'r' ? (Math.random() < .5 ? 'w' : 'b') : color, mode: 'quick', rated });
+    $('#start').onclick = () => startGame({ bot: League.botById(sel), color: color === 'r' ? (Math.random() < .5 ? 'w' : 'b') : color, mode: 'quick', rated, tc: tcId });
   }
 
   // ---------- leaderboard ----------
@@ -158,10 +234,15 @@
   }
 
   // ---------- live game ----------
-  function startGame({ bot, color, mode, rated }) {
+  function startGame({ bot, color, mode, rated, tc }) {
     R = null;
     window.scrollTo(0, 0);
-    G = { chess: new Chess(), bot, color, mode, rated, sans: [], moves: [], sel: null, over: false, thinking: false, botElo: League.rating(bot.id) };
+    const T = TCS.find(t => t.id === tc) || TCS[0];
+    G = { chess: new Chess(), bot, color, mode, rated, sans: [], moves: [], sel: null, over: false, thinking: false, botElo: League.rating(bot.id),
+      tc: T, time: { w: T.base * 1000, b: T.base * 1000 }, turnStart: Date.now() };
+    clearInterval(clockTimer);
+    if (T.base) clockTimer = setInterval(tick, 100);
+    app.classList.add('enter'); setTimeout(() => app.classList.remove('enter'), 700);
     renderGame();
     if (G.chess.turn !== color) setTimeout(botMove, 400);
   }
@@ -173,21 +254,24 @@
     const last = g.moves[g.moves.length - 1];
     const check = c.inCheck() ? c.kingSq(c.turn) : null;
     const pl = S.player, b = g.bot;
-    const top = `<div class="pbar"><span class="av">${b.avatar}</span><b>${esc(b.name)}</b> <small>(${g.botElo})</small>${g.thinking ? '<span class="think">thinking…</span>' : ''}</div>`;
-    const bottom = `<div class="pbar"><span class="av">🙂</span><b>You</b> <small>(${pl.rating})</small></div>`;
+    const botC = g.color === 'w' ? 'b' : 'w';
+    const clock = col => g.tc.base ? `<div class="clock ${c.turn === col && !g.over ? 'active' : ''}" id="clk-${col}">${fmtClock(remaining(col))}</div>` : '';
+    const top = `<div class="pbar"><span class="av">${b.avatar}</span><div class="who"><div><b>${esc(b.name)}</b> <small>(${g.botElo})</small>${g.thinking ? '<span class="think">thinking<i>.</i><i>.</i><i>.</i></span>' : ''}</div>${captured(c.board, botC)}</div>${clock(botC)}</div>`;
+    const bottom = `<div class="pbar"><span class="av">🙂</span><div class="who"><div><b>You</b> <small>(${pl.rating})</small></div>${captured(c.board, g.color)}</div>${clock(g.color)}</div>`;
     let moveList = '';
-    for (let i = 0; i < g.sans.length; i += 2) moveList += `<div class="mv"><span class="n">${i / 2 + 1}.</span><span>${g.sans[i]}</span><span>${g.sans[i + 1] || ''}</span></div>`;
+    g.sans.forEach((san, i) => { if (i % 2 === 0) moveList += `<span class="n">${i / 2 + 1}.</span>`; moveList += `<span class="mi ${i === g.sans.length - 1 ? 'cur' : ''}">${san}</span>`; });
     app.innerHTML = `<div class="play">
       <div class="boardwrap">${top}${boardHTML(c, { flip: g.color === 'b', sel: g.sel, targets, last, check })}${bottom}</div>
       <aside class="card side">
-        <h3>${g.mode === 'league' ? `${leagueBadge(S.season.league)} Round ${S.season.round + 1}` : 'Quick match'} ${g.rated ? '<small class="muted">rated</small>' : '<small class="muted">casual</small>'}</h3>
+        <h3>${g.mode === 'league' ? `${leagueBadge(S.season.league)} Round ${S.season.round + 1}` : 'Quick match'} <small class="muted">${g.rated ? 'rated' : 'casual'} · ${g.tc.label}</small></h3>
         <div class="moves" id="mvs">${moveList || '<p class="muted">Make your move.</p>'}</div>
         <div class="row">${g.over ? `<button class="btn primary" id="rev">Game review</button><button class="btn" id="back">Continue</button>`
           : `<button class="btn" id="draw">½ Offer draw</button><button class="btn danger" id="resign">Resign</button>`}</div>
         <p id="msg" class="muted">${g.msg || ''}</p>
       </aside></div>`;
-    const mv = $('#mvs'); mv.scrollTop = mv.scrollHeight;
+    scrollMoves($('#mvs'), $('#mvs .cur'));
     window.scrollTo(0, keepScroll);
+    if (g.anim) { animateMove(g.anim, g.color === 'b'); g.anim = null; }
     app.querySelectorAll('.sq').forEach(el => el.onclick = () => clickSq(+el.dataset.sq));
     if (g.over) { $('#rev').onclick = () => review(g.record); $('#back').onclick = () => { G = null; nav(g.mode === 'league' ? 'league' : 'quick'); }; }
     else { $('#resign').onclick = () => confirm('Resign this game?') && resign(); $('#draw').onclick = offerDraw; }
@@ -214,11 +298,37 @@
     ov.querySelectorAll('button').forEach(b => b.onclick = () => { ov.remove(); userMove(ms[+b.dataset.i]); });
   }
 
+  function remaining(col) {
+    const g = G; return g.time[col] - (col === g.chess.turn && !g.over && g.tc.base ? Date.now() - g.turnStart : 0);
+  }
+  function tick() {
+    const g = G; if (!g || g.over || !g.tc.base) { clearInterval(clockTimer); return; }
+    for (const col of ['w', 'b']) {
+      const el = document.getElementById('clk-' + col); if (!el) continue;
+      const t = remaining(col); el.textContent = fmtClock(t); el.classList.toggle('low', t < 20000);
+    }
+    if (remaining(g.chess.turn) <= 0) flag(g.chess.turn);
+  }
+  function flag(col) {
+    const other = col === 'w' ? 'b' : 'w';
+    const onlyKing = !G.chess.board.some(p => p && p.toLowerCase() !== 'k' && (p < 'a') === (other === 'w'));
+    G.time[col] = 0;
+    if (onlyKing) finish('1/2-1/2', 'timeout vs insufficient material');
+    else finish(col === 'w' ? '0-1' : '1-0', 'timeout');
+  }
   function applyMove(m) {
-    const g = G; g.sans.push(g.chess.play(m)); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null;
+    const g = G, mover = g.chess.turn;
+    if (g.tc.base) {
+      g.time[mover] -= Date.now() - g.turnStart;
+      if (g.time[mover] <= 0) { flag(mover); return false; }
+      g.time[mover] += g.tc.inc * 1000; g.turnStart = Date.now();
+    }
+    g.sans.push(g.chess.play(m)); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null; g.anim = m;
+    return true;
   }
   function userMove(m) {
-    applyMove(m); renderGame();
+    if (!applyMove(m)) return;
+    renderGame();
     if (!checkEnd()) setTimeout(botMove, 250);
   }
   function botMove() {
@@ -226,8 +336,10 @@
     g.thinking = true; renderGame();
     setTimeout(() => {
       if (G !== g) return;
-      const m = AI.chooseMove(g.chess, g.botElo);
-      g.thinking = false; applyMove(m); renderGame(); checkEnd();
+      const budget = g.tc.base ? Math.max(80, remaining(g.chess.turn) / 30) : undefined;
+      const m = AI.chooseMove(g.chess, g.botElo, budget);
+      if (G !== g || g.over) return;
+      g.thinking = false; if (!applyMove(m)) return; renderGame(); checkEnd();
     }, 60);
   }
   function checkEnd() {
@@ -246,7 +358,8 @@
   }
 
   function finish(result, reason, silent) {
-    const g = G; g.over = true; g.thinking = false;
+    const g = G; if (g.over) return; g.over = true; g.thinking = false; clearInterval(clockTimer);
+    if (g.tc.base) g.time[g.chess.turn] = remaining(g.chess.turn);
     const score = result === '1/2-1/2' ? 0.5 : (result === '1-0') === (g.color === 'w') ? 1 : 0;
     let delta = null, summary = null;
     if (g.rated) { delta = League.ratePlayer(g.bot.id, score); }
@@ -258,6 +371,7 @@
     if (silent) return;
     g.msg = `${result} · ${reason}`;
     renderGame();
+    if (score === 1) confetti();
     const title = score === 1 ? 'You won! 🎉' : score === 0 ? `${g.bot.name} won` : 'Draw';
     let extra = '';
     if (summary) {
@@ -337,6 +451,7 @@
   function updateProgress() { const p = $('#prog'); if (p && R) p.style.width = (100 * R.data.length / R.rec.moves.length) + '%'; }
 
   function renderReview() {
+    const keepScroll = window.scrollY;
     const r = R, rec = r.rec, n = rec.sans.length, ply = r.ply;
     const c = new Chess(r.fens[ply]);
     const d = ply > 0 ? r.data[ply - 1] : null;
@@ -359,9 +474,9 @@
       ${r.data.map((x, i) => x && ['mistake', 'blunder', 'inaccuracy'].includes(x.cls) ? `<circle cx="${((i + 1) / n) * W}" cy="${H - (winPct(clampCp(r.evals[i + 1] ?? 0)) / 100) * H}" r="4" fill="${CLS[x.cls].color}"/>` : '').join('')}
       <line x1="${(ply / Math.max(1, n)) * W}" y1="0" x2="${(ply / Math.max(1, n)) * W}" y2="${H}" stroke="#81b64c" stroke-width="2"/></svg>`;
     let list = '';
-    for (let i = 0; i < n; i += 2) {
-      const cell = j => j < n ? `<span class="rv ${j + 1 === ply ? 'cur' : ''}" data-p="${j + 1}">${r.data[j] ? `<i style="color:${CLS[r.data[j].cls].color}">${CLS[r.data[j].cls].icon}</i>` : ''}${rec.sans[j]}</span>` : '<span></span>';
-      list += `<div class="mv"><span class="n">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}</div>`;
+    for (let j = 0; j < n; j++) {
+      if (j % 2 === 0) list += `<span class="n">${j / 2 + 1}.</span>`;
+      list += `<span class="rv ${j + 1 === ply ? 'cur' : ''}" data-p="${j + 1}">${r.data[j] ? `<i style="color:${CLS[r.data[j].cls].color}">${CLS[r.data[j].cls].icon}</i>` : ''}${rec.sans[j]}</span>`;
     }
     const counts = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     let coach = '<p class="muted">Starting position. Use ← → to step through the game.</p>';
@@ -372,28 +487,35 @@
     } else if (!r.done && !r.data.length) coach = '<p class="muted">Analyzing…</p>';
     app.innerHTML = `<div class="play">
       <div class="boardwrap"><div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${fmtEval(evNow)}</span></div>
-        ${boardHTML(c, { flip, last: m, check: c.inCheck() ? c.kingSq(c.turn) : null, arrow: d && d.cls !== 'best' && d.cls !== 'book' ? d.best : null })}</div>
+        <div class="boardcol"><div class="pbar sm"><b>${rec.color === 'w' ? esc(rec.opp) : 'You'}</b>${captured(c.board, flip ? 'w' : 'b')}</div>
+        ${boardHTML(c, { flip, last: m, check: c.inCheck() ? c.kingSq(c.turn) : null, arrow: d && d.cls !== 'best' && d.cls !== 'book' ? d.best : null })}
+        <div class="pbar sm"><b>${rec.color === 'w' ? 'You' : esc(rec.opp)}</b>${captured(c.board, flip ? 'b' : 'w')}</div></div></div>
         <div class="navbtns"><button class="btn" data-n="0">⏮</button><button class="btn" data-n="-1">◀</button><button class="btn" data-n="1">▶</button><button class="btn" data-n="9">⏭</button></div></div>
       <aside class="card side">
         <h3>Game review <small class="muted">vs ${esc(rec.opp)} · ${rec.result}</small></h3>
         ${!r.done ? `<div class="progress"><div id="prog" style="width:${100 * r.data.length / Math.max(1, n)}%"></div></div>` : ''}
+        <div class="moves">${list}</div>
         <div class="coach">${coach}</div>
         ${graph}
         <table class="tbl sum"><thead><tr><th></th><th>You</th><th>${esc(rec.opp)}</th></tr></thead><tbody>
           <tr><td>Accuracy</td><td><b>${avg(sides[you].acc)}</b></td><td><b>${avg(sides[opp].acc)}</b></td></tr>
           ${counts.map(k => `<tr><td style="color:${CLS[k].color}">${CLS[k].icon} ${CLS[k].label}</td><td>${sides[you].cnt[k] || 0}</td><td>${sides[opp].cnt[k] || 0}</td></tr>`).join('')}
         </tbody></table>
-        <div class="moves">${list}</div>
       </aside></div>`;
     app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => step(+b.dataset.n));
     app.querySelectorAll('.rv').forEach(b => b.onclick = () => { R.ply = +b.dataset.p; renderReview(); });
     const svg = app.querySelector('.graph');
     svg.onclick = e => { const rc = svg.getBoundingClientRect(); R.ply = Math.round(((e.clientX - rc.left) / rc.width) * n); renderReview(); };
-    const cur = app.querySelector('.rv.cur'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+    scrollMoves(app.querySelector('.side .moves'), app.querySelector('.rv.cur') || app.querySelector('.side .moves .n'));
+    window.scrollTo(0, keepScroll);
+    if (r.anim) { animateMove(r.anim, flip); r.anim = null; }
   }
   function step(k) {
     if (!R) return; const n = R.rec.sans.length;
-    R.ply = k === 0 ? 0 : k === 9 ? n : Math.max(0, Math.min(n, R.ply + k)); renderReview();
+    const prev = R.ply;
+    R.ply = k === 0 ? 0 : k === 9 ? n : Math.max(0, Math.min(n, R.ply + k));
+    if (R.ply === prev + 1) R.anim = R.rec.moves[prev];
+    renderReview();
   }
   document.addEventListener('keydown', e => {
     if (!R || !document.querySelector('.navbtns')) return;
