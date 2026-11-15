@@ -500,7 +500,7 @@
     let coach = '<p class="muted">Starting position. Use ← → to step through the game.</p>';
     if (d) {
       const who = d.color === you ? 'You' : rec.opp, k = CLS[d.cls], ex = r.coach[ply];
-      coach = `<p class="cl"><b style="color:${k.color}">${k.icon} ${rec.sans[ply - 1]} is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()} move</b> <span class="muted">(${who})</span></p>`;
+      coach = `<p class="cl"><b style="color:${k.color}">${k.icon} ${rec.sans[ply - 1]} is ${d.cls === 'best' ? 'the best' : (/^[aeiou]/i.test(k.label) ? 'an ' : 'a ') + k.label.toLowerCase()} move</b> <span class="muted">(${who})</span></p>`;
       if (ex) {
         coach += `<p>${ex.text.join(' ')}</p>` + (ex.line ? `<p class="line">Best line: ${ex.line.map(x => `<b>${x}</b>`).join(' ')}</p>` : '');
       } else {
