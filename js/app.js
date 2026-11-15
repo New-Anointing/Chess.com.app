@@ -13,6 +13,7 @@
   // ---------- navigation ----------
   function nav(view) {
     R = null;
+    window.scrollTo(0, 0);
     document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     ({ home, league, quick, leaderboard, history })[view]();
   }
@@ -159,12 +160,14 @@
   // ---------- live game ----------
   function startGame({ bot, color, mode, rated }) {
     R = null;
+    window.scrollTo(0, 0);
     G = { chess: new Chess(), bot, color, mode, rated, sans: [], moves: [], sel: null, over: false, thinking: false, botElo: League.rating(bot.id) };
     renderGame();
     if (G.chess.turn !== color) setTimeout(botMove, 400);
   }
 
   function renderGame() {
+    const keepScroll = window.scrollY;
     const g = G, c = g.chess, legal = g.over ? [] : c.moves();
     const targets = g.sel != null ? legal.filter(m => m.from === g.sel).map(m => m.to) : [];
     const last = g.moves[g.moves.length - 1];
@@ -184,6 +187,7 @@
         <p id="msg" class="muted">${g.msg || ''}</p>
       </aside></div>`;
     const mv = $('#mvs'); mv.scrollTop = mv.scrollHeight;
+    window.scrollTo(0, keepScroll);
     app.querySelectorAll('.sq').forEach(el => el.onclick = () => clickSq(+el.dataset.sq));
     if (g.over) { $('#rev').onclick = () => review(g.record); $('#back').onclick = () => { G = null; nav(g.mode === 'league' ? 'league' : 'quick'); }; }
     else { $('#resign').onclick = () => confirm('Resign this game?') && resign(); $('#draw').onclick = offerDraw; }
