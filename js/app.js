@@ -3,6 +3,18 @@
   const $ = s => document.querySelector(s);
   const app = $('#app');
   const GLYPH = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  // Original flat vector piece set (fill/stroke come from CSS variables).
+  const PIECE_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <g id="pc-base"><rect x="22" y="76" width="56" height="12" rx="6"/></g>
+    <symbol id="pc-p" viewBox="0 0 100 100"><path d="M36 78 Q37 60 44 53 Q38 49 38 41 a12 12 0 1 1 24 0 Q62 49 56 53 Q63 60 64 78 Z"/><rect x="26" y="74" width="48" height="13" rx="6"/></symbol>
+    <symbol id="pc-r" viewBox="0 0 100 100"><path d="M28 18 h11 v8 h6 v-8 h10 v8 h6 v-8 h11 v18 l-6 6 v28 l6 4 h-48 l6 -4 v-28 l-6 -6 Z"/><rect x="22" y="74" width="56" height="13" rx="6"/><path d="M34 42 h32" fill="none" stroke="currentColor"/></symbol>
+    <symbol id="pc-n" viewBox="0 0 100 100"><path d="M30 76 Q30 62 44 52 Q46 46 42 46 L30 54 Q22 56 20 48 Q20 40 30 32 L40 20 L44 12 L50 22 Q72 24 76 50 Q79 64 74 76 Z"/><rect x="24" y="74" width="56" height="13" rx="6"/><circle cx="42" cy="32" r="4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="pc-b" viewBox="0 0 100 100"><circle cx="50" cy="14" r="6"/><path d="M50 20 Q32 36 36 54 Q40 62 50 62 Q60 62 64 54 Q68 36 50 20 Z"/><path d="M38 76 Q38 66 44 62 h12 Q62 66 62 76 Z"/><rect x="24" y="74" width="52" height="13" rx="6"/><path d="M56 30 L45 46" fill="none" stroke-width="5"/></symbol>
+    <symbol id="pc-q" viewBox="0 0 100 100"><path d="M28 74 L20 34 L36 50 L38 24 L50 46 L62 24 L64 50 L80 34 L72 74 Z"/><circle cx="20" cy="30" r="6"/><circle cx="38" cy="20" r="6"/><circle cx="62" cy="20" r="6"/><circle cx="80" cy="30" r="6"/><rect x="22" y="72" width="56" height="15" rx="7"/></symbol>
+    <symbol id="pc-k" viewBox="0 0 100 100"><path d="M46 6 h8 v8 h8 v8 h-8 v12 h-8 v-12 h-8 v-8 h8 Z"/><path d="M28 74 Q16 50 34 42 Q46 38 50 50 Q54 38 66 42 Q84 50 72 74 Z"/><rect x="22" y="72" width="56" height="15" rx="7"/></symbol>
+  </defs></svg>`;
+  document.body.insertAdjacentHTML('afterbegin', PIECE_DEFS);
+  const pieceSVG = p => `<svg class="pcs ${p < 'a' ? 'w' : 'b'}" viewBox="0 0 100 100"><use href="#pc-${p.toLowerCase()}"/></svg>`;
   const { LEAGUES, BOTS } = League;
   let S = League.load();
   let G = null;        // live game
@@ -42,7 +54,7 @@
     for (const t of ['q', 'r', 'b', 'n', 'p']) for (let i = 0; i < Math.max(0, start[t] - (theirs[t] || 0)); i++) list.push(t);
     const pts = list.reduce((a, t) => a + VALS[t], 0);
     const glyph = t => GLYPH[color === 'w' ? t : t.toUpperCase()];
-    return `<span class="caps" title="${pts} points captured">${list.map(t => `<i>${glyph(t)}</i>`).join('')}${pts ? `<em>${pts} pts</em>` : ''}${my > th ? `<b>+${my - th}</b>` : ''}</span>`;
+    return `<span class="caps" title="${pts} points captured">${list.map(t => `<i>${pieceSVG(color === 'w' ? t : t.toUpperCase())}</i>`).join('')}${pts ? `<em>${pts} pts</em>` : ''}${my > th ? `<b>+${my - th}</b>` : ''}</span>`;
   }
   function animateMove(m, flip) {
     if (!m) return;
@@ -55,7 +67,7 @@
     };
     slide(m.from, m.to);
     const pc = board.querySelector(`[data-sq="${m.to}"] .pc`);
-    if (pc && /♔|♚/.test(pc.textContent) && Math.abs((m.to & 7) - (m.from & 7)) === 2) {
+    if (pc && /k/i.test(pc.dataset.p) && Math.abs((m.to & 7) - (m.from & 7)) === 2) {
       if (m.to > m.from) slide(m.to + 1, m.to - 1); else slide(m.to - 2, m.to + 1);
     }
     const toSq = board.querySelector(`[data-sq="${m.to}"]`); toSq && toSq.classList.add('landed');
@@ -221,7 +233,7 @@
       if (t) cls.push(p ? 'cap' : 'dot');
       const coordF = (flip ? r === 0 : r === 7) ? `<i class="cf">${'abcdefgh'[f]}</i>` : '';
       const coordR = (flip ? f === 7 : f === 0) ? `<i class="cr">${8 - r}</i>` : '';
-      h += `<div class="${cls.join(' ')}" data-sq="${sq}">${coordR}${coordF}${p ? `<span class="pc ${p < 'a' ? 'w' : 'b'}">${GLYPH[p]}</span>` : ''}</div>`;
+      h += `<div class="${cls.join(' ')}" data-sq="${sq}">${coordR}${coordF}${p ? `<span class="pc" data-p="${p}">${pieceSVG(p)}</span>` : ''}</div>`;
     }
     let svg = '';
     if (arrow) {
@@ -293,7 +305,7 @@
 
   function choosePromo(ms) {
     const ov = document.createElement('div'); ov.className = 'overlay';
-    ov.innerHTML = `<div class="card promo">${ms.map((m, i) => `<button data-i="${i}">${GLYPH[m.promo]}</button>`).join('')}</div>`;
+    ov.innerHTML = `<div class="card promo">${ms.map((m, i) => `<button data-i="${i}">${pieceSVG(m.promo)}</button>`).join('')}</div>`;
     document.body.appendChild(ov);
     ov.querySelectorAll('button').forEach(b => b.onclick = () => { ov.remove(); userMove(ms[+b.dataset.i]); });
   }
