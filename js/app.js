@@ -88,6 +88,9 @@
     }
   }
   let clockTimer = null;
+  const sndBtn = $('#snd');
+  const setSndIcon = () => { sndBtn.textContent = Sound.on ? '🔊' : '🔇'; sndBtn.classList.toggle('off', !Sound.on); };
+  sndBtn.onclick = () => { Sound.toggle(); setSndIcon(); }; setSndIcon();
 
   // ---------- navigation ----------
   function nav(view) {
@@ -256,6 +259,7 @@
     if (T.base) clockTimer = setInterval(tick, 100);
     app.classList.add('enter'); setTimeout(() => app.classList.remove('enter'), 700);
     renderGame();
+    Sound.play('start');
     if (G.chess.turn !== color) setTimeout(botMove, 400);
   }
 
@@ -318,6 +322,7 @@
     for (const col of ['w', 'b']) {
       const el = document.getElementById('clk-' + col); if (!el) continue;
       const t = remaining(col); el.textContent = fmtClock(t); el.classList.toggle('low', t < 20000);
+      if (col === g.color && col === g.chess.turn && t < 10000 && !g.warned) { g.warned = true; Sound.play('low'); }
     }
     if (remaining(g.chess.turn) <= 0) flag(g.chess.turn);
   }
@@ -335,7 +340,7 @@
       if (g.time[mover] <= 0) { flag(mover); return false; }
       g.time[mover] += g.tc.inc * 1000; g.turnStart = Date.now();
     }
-    g.sans.push(g.chess.play(m)); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null; g.anim = m;
+    g.sans.push(g.chess.play(m)); Sound.forSan(g.sans[g.sans.length - 1]); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null; g.anim = m;
     return true;
   }
   function userMove(m) {
@@ -383,6 +388,7 @@
     if (silent) return;
     g.msg = `${result} · ${reason}`;
     renderGame();
+    Sound.play(score === 1 ? 'win' : score === 0 ? 'lose' : 'draw');
     if (score === 1) confetti();
     const title = score === 1 ? 'You won! 🎉' : score === 0 ? `${g.bot.name} won` : 'Draw';
     let extra = '';
@@ -426,7 +432,7 @@
   function review(rec) {
     G = null;
     document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
-    R = { rec, ply: rec.sans.length, data: [], evals: [], done: false };
+    R = { rec, ply: rec.sans.length, data: [], evals: [], done: false, coach: {}, pending: {} };
     // Rebuild positions
     const c = new Chess(); R.fens = [c.fen()];
     for (const m of rec.moves) { const lm = c.moves().find(x => x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null)); c.make(lm); R.fens.push(c.fen()); }
@@ -455,7 +461,7 @@
     // Missing a win you are already completely winning by is softened.
     if ((cls === 'mistake' || cls === 'blunder') && clampCp(ps) > 500) cls = 'inaccuracy';
     const bestSan = c.san(a.best);
-    r.data[i] = { cls, cpLoss, wpLoss, acc: Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * wpLoss) - 3.1669)), bestSan, best: a.best, color: c.turn };
+    r.data[i] = { bestScore: a.bestScore, playedScore: ps, cls, cpLoss, wpLoss, acc: Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * wpLoss) - 3.1669)), bestSan, best: a.best, color: c.turn };
     if (i % 2 === 1 || i === rec.moves.length - 1) renderReview();
     else updateProgress();
     setTimeout(() => analyzeStep(i + 1), 0);
@@ -493,9 +499,24 @@
     const counts = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     let coach = '<p class="muted">Starting position. Use ← → to step through the game.</p>';
     if (d) {
-      const who = d.color === you ? 'You' : rec.opp, k = CLS[d.cls];
-      coach = `<p><b style="color:${k.color}">${k.icon} ${rec.sans[ply - 1]} is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()} move</b> <span class="muted">(${who})</span></p>
-        ${d.cls !== 'best' && d.cls !== 'book' ? `<p>Best was <b>${d.bestSan}</b>${d.cpLoss ? ` — you lost about ${(Math.min(d.cpLoss, 2000) / 100).toFixed(1)} pawns of advantage` : ''}.</p>` : ''}`;
+      const who = d.color === you ? 'You' : rec.opp, k = CLS[d.cls], ex = r.coach[ply];
+      coach = `<p class="cl"><b style="color:${k.color}">${k.icon} ${rec.sans[ply - 1]} is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()} move</b> <span class="muted">(${who})</span></p>`;
+      if (ex) {
+        coach += `<p>${ex.text.join(' ')}</p>` + (ex.line ? `<p class="line">Best line: ${ex.line.map(x => `<b>${x}</b>`).join(' ')}</p>` : '');
+      } else {
+        coach += '<p class="muted">Coach is thinking…</p>';
+        if (!r.pending[ply]) {
+          r.pending[ply] = true;
+          const key = ply;
+          setTimeout(() => {
+            if (!R || R !== r) return;
+            try {
+              r.coach[key] = Coach.explain(r.fens[key - 1], rec.moves[key - 1], { cls: d.cls, best: d.best, bestScore: d.bestScore, playedScore: d.playedScore, ply: key - 1, you: d.color === you, name: rec.opp });
+            } catch (e) { r.coach[key] = { text: [d.cls === 'best' ? 'This is the best move.' : `Best was ${d.bestSan}.`], line: null }; }
+            if (R === r && R.ply === key) renderReview();
+          }, 30);
+        }
+      }
     } else if (!r.done && !r.data.length) coach = '<p class="muted">Analyzing…</p>';
     app.innerHTML = `<div class="play">
       <div class="boardwrap"><div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${fmtEval(evNow)}</span></div>
@@ -526,7 +547,7 @@
     if (!R) return; const n = R.rec.sans.length;
     const prev = R.ply;
     R.ply = k === 0 ? 0 : k === 9 ? n : Math.max(0, Math.min(n, R.ply + k));
-    if (R.ply === prev + 1) R.anim = R.rec.moves[prev];
+    if (R.ply === prev + 1) { R.anim = R.rec.moves[prev]; Sound.forSan(R.rec.sans[prev]); }
     renderReview();
   }
   document.addEventListener('keydown', e => {
