@@ -111,7 +111,7 @@
       else out.push(`Better was ${bSan}, which ${join(describe(bF))}.`);
       if (bF.captures && !pF.captures && !bm8) out.push('That was a chance to win material.');
     }
-    return { text: out, line: cls === 'best' || cls === 'book' || pF.mate ? null : line };
+    return { reply: reply ? { from: reply.from, to: reply.to } : null, text: out, line: cls === 'best' || cls === 'book' || pF.mate ? null : line };
   }
 
   root.Coach = { explain };
