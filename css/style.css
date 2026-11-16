@@ -233,3 +233,9 @@ html { -webkit-tap-highlight-color:transparent; } body { overscroll-behavior-y:n
 .switch input:checked + .track { background:var(--accent); }
 .switch input:checked + .track .knob { transform:translateX(22px); }
 .switch input:focus-visible + .track { outline:2px solid #fff; outline-offset:2px; }
+
+.slide-l > * { animation:slideInL .32s cubic-bezier(.2,.8,.3,1) both !important; }
+.slide-r > * { animation:slideInR .32s cubic-bezier(.2,.8,.3,1) both !important; }
+@keyframes slideInL { from { opacity:0; transform:translateX(48px); } }
+@keyframes slideInR { from { opacity:0; transform:translateX(-48px); } }
+body { overflow-x:hidden; }

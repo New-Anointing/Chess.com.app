@@ -93,7 +93,12 @@
   sndBtn.onclick = () => { Sound.toggle(); setSndIcon(); }; setSndIcon();
 
   // ---------- navigation ----------
-  function nav(view) {
+  const VIEWS = ['home', 'league', 'quick', 'leaderboard', 'history'];
+  let curView = 'home';
+  function nav(view, dir) {
+    curView = view;
+    app.classList.remove('slide-l', 'slide-r');
+    if (dir) { void app.offsetWidth; app.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); setTimeout(() => app.classList.remove('slide-l', 'slide-r'), 400); }
     R = null;
     document.body.classList.remove('rv-mode');
     window.scrollTo(0, 0);
@@ -758,6 +763,28 @@
     if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1);
     if (e.key === 'Home') step(0); if (e.key === 'End') step(9);
   });
+
+  // ---------- swipe gestures (phones) ----------
+  let sw = null;
+  const blocked = el => el.closest('.board, .evgraph, .moves, .ladder, .nav, .overlay, input, .switch');
+  document.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) { sw = null; return; }
+    const t = e.touches[0];
+    sw = { x: t.clientX, y: t.clientY, t: Date.now(), skip: !!blocked(e.target) };
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!sw || sw.skip) { sw = null; return; }
+    const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, dt = Date.now() - sw.t;
+    sw = null;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6 || dt > 700) return;
+    const dir = dx < 0 ? 1 : -1; // swipe left = next
+    if (document.querySelector('.overlay')) return;
+    if (R && document.querySelector('.rv-wrap')) { step(dir); return; }
+    if (G) return; // never leave a game by accident
+    const i = VIEWS.indexOf(curView), j = i + dir;
+    if (i < 0 || j < 0 || j >= VIEWS.length) return;
+    nav(VIEWS[j], dir);
+  }, { passive: true });
 
   nav('home');
 })();
