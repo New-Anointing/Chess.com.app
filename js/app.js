@@ -102,6 +102,10 @@
     app.classList.add(cls);
     enterTimer = setTimeout(() => app.classList.remove(cls), 900);
   }
+  // On phones the tab bar lives directly under <body> so no ancestor (header, animations) can move or hide it.
+  const navEl = document.querySelector('.nav'), topEl = document.querySelector('.top'), mq = matchMedia('(max-width: 820px)');
+  const placeNav = () => { if (mq.matches) { if (navEl.parentElement !== document.body) document.body.appendChild(navEl); } else if (navEl.parentElement !== topEl) topEl.insertBefore(navEl, topEl.querySelector('.sndbtn')); };
+  placeNav(); mq.addEventListener ? mq.addEventListener('change', placeNav) : mq.addListener(placeNav);
   const VIEWS = ['home', 'league', 'quick', 'leaderboard', 'history'];
   let curView = 'home';
   function nav(view, dir) {
