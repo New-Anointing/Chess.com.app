@@ -185,7 +185,7 @@ html { -webkit-tap-highlight-color:transparent; } body { overscroll-behavior-y:n
 .strip .rv { flex:none; padding:4px 7px; border-radius:6px; border-bottom:3px solid transparent; display:flex; align-items:center; }
 .strip .rv.cur { background:#ffffff14; border-bottom-color:#ddd; }
 .rv.c-blunder { color:#ff7b6b; } .rv.c-mistake { color:#f5a84a; } .rv.c-inaccuracy { color:#f7d36b; } .rv.c-great { color:#8fb8dd; }
-.rv-bottom { display:grid; grid-template-columns:repeat(3,64px) 1fr; gap:6px; align-items:center; position:sticky; bottom:0; z-index:5; background:linear-gradient(transparent,var(--bg) 25%); padding:14px 0 max(8px, env(safe-area-inset-bottom)); }
+.rv-bottom { display:grid; grid-template-columns:repeat(4,54px) 1fr; gap:6px; align-items:center; position:sticky; bottom:0; z-index:5; background:linear-gradient(transparent,var(--bg) 25%); padding:14px 0 max(8px, env(safe-area-inset-bottom)); }
 .tool { background:none; border:0; color:var(--muted); font:700 12px system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:4px 0; border-radius:10px; }
 .tool span { font-size:24px; line-height:1; } .tool.on { color:var(--text); background:#ffffff12; } .tool:disabled { opacity:.35; cursor:default; }
 .nextbtn { font-size:22px; font-weight:800; padding:16px 10px; border-radius:12px; } .nextbtn:disabled { opacity:.5; }
@@ -193,3 +193,7 @@ html { -webkit-tap-highlight-color:transparent; } body { overscroll-behavior-y:n
 .accrow div { background:var(--panel2); border-radius:10px; padding:10px; text-align:center; } .accrow b { display:block; font-size:26px; } .accrow span { color:var(--muted); font-size:13px; }
 .rv-wrap .evalwrap { grid-template-columns:16px 1fr; gap:6px; }
 @media (max-width: 820px) { .rv-wrap { gap:8px; } .coachav { width:54px; height:54px; } .coachrow { grid-template-columns:54px 1fr; } .bubble p { font-size:14px; } }
+
+.assist { display:flex; gap:6px; } .assist .tool { flex:1; } .small { font-size:12px; margin:0; }
+.board { touch-action:manipulation; }
+.updbar span { flex:1; } .updbar .x { background:none; color:#fff; font-size:22px; padding:2px 8px; margin-left:6px; }

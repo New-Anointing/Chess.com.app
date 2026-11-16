@@ -224,19 +224,46 @@
   }
 
   // ---------- board rendering ----------
+  const ARROW = { best: '#81b64c', alt: '#f0a92b', next: '#4fa8e0', threat: '#e0503c', user: '#f5a623' };
+  let marks = { arrows: [], hl: [] }, drawMode = false, drawFrom = null;
+  const clearMarks = () => { marks = { arrows: [], hl: [] }; drawFrom = null; };
+  function toggleMark(a, b) {
+    if (a === b) { const i = marks.hl.indexOf(a); i >= 0 ? marks.hl.splice(i, 1) : marks.hl.push(a); return; }
+    const i = marks.arrows.findIndex(x => x.from === a && x.to === b);
+    i >= 0 ? marks.arrows.splice(i, 1) : marks.arrows.push({ from: a, to: b, color: ARROW.user });
+  }
+  // Board input: left click/tap = normal action; right-drag (desktop) or Draw mode (phone) = arrows and highlights.
+  function bindBoard(onSquare, rerender) {
+    const board = app.querySelector('.board'); if (!board) return;
+    const sqAt = e => { const el = document.elementFromPoint(e.clientX, e.clientY); const q = el && el.closest('.sq'); return q ? +q.dataset.sq : null; };
+    let rs = null;
+    board.oncontextmenu = e => e.preventDefault();
+    board.onpointerdown = e => { if (e.button === 2) { rs = sqAt(e); e.preventDefault(); } };
+    board.onpointerup = e => { if (e.button === 2 && rs != null) { const t = sqAt(e); if (t != null) toggleMark(rs, t); rs = null; rerender(); } };
+    app.querySelectorAll('.sq').forEach(el => el.onclick = () => {
+      const sq = +el.dataset.sq;
+      if (drawMode) { if (drawFrom == null) drawFrom = sq; else { toggleMark(drawFrom, sq); drawFrom = null; } return rerender(); }
+      const had = marks.arrows.length || marks.hl.length;
+      clearMarks();
+      if (onSquare) onSquare(sq); else if (had) rerender();
+    });
+  }
   function arrowSVG(from, to, color, flip) {
     const c = q => { const v = flip ? 63 - q : q; return [(v & 7) + .5, (v >> 3) + .5]; };
     const A = c(from), B = c(to), dx = B[0] - A[0], dy = B[1] - A[1];
     const pts = [A];
     if (Math.abs(dx) + Math.abs(dy) === 3 && Math.abs(dx) && Math.abs(dy)) pts.push(Math.abs(dy) > Math.abs(dx) ? [A[0], B[1]] : [B[0], A[1]]); // knight: L-shape
     const P = pts[pts.length - 1], L = Math.hypot(B[0] - P[0], B[1] - P[1]), ux = (B[0] - P[0]) / L, uy = (B[1] - P[1]) / L;
-    const tip = [B[0] - ux * .12, B[1] - uy * .12], hl = .42, hw = .3, base = [tip[0] - ux * hl, tip[1] - uy * hl];
+    const tip = [B[0] - ux * .1, B[1] - uy * .1], hl = .5, hw = .37, base = [tip[0] - ux * hl, tip[1] - uy * hl];
     const shaft = pts.concat([base]).map(q => q.join(',')).join(' ');
-    return `<g opacity=".85"><polyline points="${shaft}" fill="none" stroke="${color}" stroke-width=".2" stroke-linejoin="round"/>
+    return `<g opacity=".8"><polyline points="${shaft}" fill="none" stroke="${color}" stroke-width=".27" stroke-linejoin="miter"/>
       <polygon points="${tip.join(',')} ${base[0] - uy * hw},${base[1] + ux * hw} ${base[0] + uy * hw},${base[1] - ux * hw}" fill="${color}"/></g>`;
   }
   function boardHTML(chess, opts) {
-    const { flip, sel, targets = [], last, check, arrow, arrows = [], tints = {}, badge } = opts;
+    let { flip, sel, targets = [], last, check, arrow, arrows = [], tints = {}, badge } = opts;
+    tints = { ...tints }; marks.hl.forEach(q => tints[q] = 'rgba(235,97,80,.8)');
+    arrows = arrows.concat(marks.arrows);
+    if (drawMode && drawFrom != null) sel = drawFrom;
     let h = '';
     for (let i = 0; i < 64; i++) {
       const sq = flip ? 63 - i : i, r = sq >> 3, f = sq & 7, p = chess.board[sq];
@@ -267,6 +294,7 @@
     document.body.classList.remove('rv-mode');
     window.scrollTo(0, 0);
     const T = TCS.find(t => t.id === tc) || TCS[0];
+    clearMarks();
     G = { chess: new Chess(), bot, color, mode, rated, sans: [], moves: [], sel: null, over: false, thinking: false, botElo: League.rating(bot.id),
       tc: T, time: { w: T.base * 1000, b: T.base * 1000 }, turnStart: Date.now() };
     clearInterval(clockTimer);
@@ -291,22 +319,43 @@
     let moveList = '';
     g.sans.forEach((san, i) => { if (i % 2 === 0) moveList += `<span class="n">${i / 2 + 1}.</span>`; moveList += `<span class="mi ${i === g.sans.length - 1 ? 'cur' : ''}">${san}</span>`; });
     app.innerHTML = `<div class="play">
-      <div class="boardwrap">${top}${boardHTML(c, { flip: g.color === 'b', sel: g.sel, targets, last, check })}${bottom}</div>
+      <div class="boardwrap">${top}${boardHTML(c, { flip: g.color === 'b', sel: g.sel, targets, last, check, arrows: g.assist ? g.assist.arrows : [], tints: g.assist ? g.assist.tints : {} })}${bottom}</div>
       <aside class="card side">
         <h3>${g.mode === 'league' ? `${leagueBadge(S.season.league)} Round ${S.season.round + 1}` : 'Quick match'} <small class="muted">${g.rated ? 'rated' : 'casual'} · ${g.tc.label}</small></h3>
         <div class="moves" id="mvs">${moveList || '<p class="muted">Make your move.</p>'}</div>
         <div class="row">${g.over ? `<button class="btn primary" id="rev">Game review</button><button class="btn" id="back">Continue</button>`
           : `<button class="btn" id="draw">½ Offer draw</button><button class="btn danger" id="resign">Resign</button>`}</div>
+        ${g.over ? '' : `<div class="assist">
+          <button class="tool" id="aHint" ${g.rated ? 'disabled title="Hints are only available in casual games"' : ''}><span>💡</span>Hint</button>
+          <button class="tool" id="aThreat" ${g.rated ? 'disabled title="Only available in casual games"' : ''}><span>⚠️</span>Threat</button>
+          <button class="tool ${drawMode ? 'on' : ''}" id="aPen"><span>✏️</span>Draw</button></div>
+          ${g.rated ? '<p class="muted small">Hints and threats are off in rated games. Untick “Rated” in Quick match to use them.</p>' : ''}`}
         <p id="msg" class="muted">${g.msg || ''}</p>
       </aside></div>`;
     scrollMoves($('#mvs'), $('#mvs .cur'));
     window.scrollTo(0, keepScroll);
     if (g.anim) { animateMove(g.anim, g.color === 'b'); g.anim = null; }
-    app.querySelectorAll('.sq').forEach(el => el.onclick = () => clickSq(+el.dataset.sq));
+    bindBoard(clickSq, renderGame);
+    const pen = $('#aPen'); if (pen) pen.onclick = () => { drawMode = !drawMode; drawFrom = null; renderGame(); };
+    const hint = $('#aHint'); if (hint) hint.onclick = () => showAssist('hint');
+    const thr = $('#aThreat'); if (thr) thr.onclick = () => showAssist('threat');
     if (g.over) { $('#rev').onclick = () => review(g.record); $('#back').onclick = () => { G = null; nav(g.mode === 'league' ? 'league' : 'quick'); }; }
     else { $('#resign').onclick = () => confirm('Resign this game?') && resign(); $('#draw').onclick = offerDraw; }
   }
 
+  function showAssist(kind) {
+    const g = G; if (!g || g.over || g.rated || g.thinking || g.chess.turn !== g.color) return;
+    let c = g.chess, color = ARROW.best;
+    if (kind === 'threat') {
+      const f = c.fen().split(' '); f[1] = f[1] === 'w' ? 'b' : 'w'; f[3] = '-';
+      c = new Chess(f.join(' ')); color = ARROW.threat;
+      if (!c.moves().length) { g.msg = 'No threats right now.'; return renderGame(); }
+    }
+    const a = AI.analyze(c, 2, 800), m = a.best, san = c.san(m);
+    g.assist = { arrows: [{ from: m.from, to: m.to, color }], tints: { [m.to]: color + (kind === 'threat' ? 'aa' : '88') } };
+    g.msg = kind === 'hint' ? `💡 Try ${san}.` : `⚠️ ${g.bot.name} is threatening ${san}${m.captured ? `, taking your ${({ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' })[m.captured.toLowerCase()]}` : ''}.`;
+    renderGame();
+  }
   function clickSq(sq) {
     const g = G; if (!g || g.over || g.thinking || g.chess.turn !== g.color) return;
     const c = g.chess, p = c.board[sq];
@@ -354,7 +403,7 @@
       if (g.time[mover] <= 0) { flag(mover); return false; }
       g.time[mover] += g.tc.inc * 1000; g.turnStart = Date.now();
     }
-    g.sans.push(g.chess.play(m)); Sound.forSan(g.sans[g.sans.length - 1]); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null; g.anim = m;
+    g.sans.push(g.chess.play(m)); Sound.forSan(g.sans[g.sans.length - 1]); g.moves.push({ from: m.from, to: m.to, promo: m.promo || null }); g.sel = null; g.anim = m; g.assist = null; clearMarks();
     return true;
   }
   function userMove(m) {
@@ -452,6 +501,7 @@
   function review(rec) {
     G = null;
     document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    clearMarks();
     R = { rec, ply: 0, data: [], evals: [], done: false, coach: {}, pending: {}, showArrows: true, bestView: false, retry: null };
     const c = new Chess(); R.fens = [c.fen()];
     for (const m of rec.moves) { const lm = c.moves().find(x => sameMove(x, m)); c.make(lm); R.fens.push(c.fen()); }
@@ -536,9 +586,20 @@
     } else if (d) {
       const k = CLS[d.cls];
       const arrows = [];
-      if (r.showArrows && !['best', 'great', 'book'].includes(d.cls) && !sameMove(d.best, m)) arrows.push({ from: d.best.from, to: d.best.to, color: '#81b64c' });
-      if (r.showArrows && BAD.includes(d.cls) && ex && ex.reply) arrows.push({ from: ex.reply.from, to: ex.reply.to, color: '#e0503c' });
-      boardOpts = { flip, last: m, arrows, tints: { [m.from]: k.color + '66', [m.to]: k.color + 'b3' }, badge: { sq: m.to, color: k.color, icon: k.icon } };
+      const tints = { [m.from]: k.color + '66', [m.to]: k.color + 'b3' };
+      const mine = d.color === you;
+      if (r.showArrows && !['best', 'great', 'book'].includes(d.cls) && !sameMove(d.best, m)) {
+        const col = BAD.includes(d.cls) ? ARROW.best : ARROW.alt; // green = what you should have played, orange = slightly better
+        arrows.push({ from: d.best.from, to: d.best.to, color: col });
+        if (tints[d.best.to] == null) tints[d.best.to] = col + '73';
+      }
+      if (r.showArrows && BAD.includes(d.cls) && ex && ex.reply) {
+        // Red when it punishes you, blue when it's your chance to punish the opponent.
+        const col = mine ? ARROW.threat : ARROW.next;
+        arrows.push({ from: ex.reply.from, to: ex.reply.to, color: col });
+        if (tints[ex.reply.to] == null) tints[ex.reply.to] = col + '80';
+      }
+      boardOpts = { flip, last: m, arrows, tints, badge: { sq: m.to, color: k.color, icon: k.icon } };
       const lab = d.cls === 'best' ? 'is the best move' : d.cls === 'great' ? 'is a great move' : d.cls === 'book' ? 'is a book move' : `is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()}`;
       title = `${figSan(rec.sans[ply - 1], d.color)} ${lab}`; icon = clsIcon(d.cls);
       const lead = /^\S+ is (the best move here|an? (inaccuracy|mistake|blunder))\.$/;
@@ -590,6 +651,7 @@
         <button class="tool ${r.showArrows ? 'on' : ''}" id="tShow" ${d ? '' : 'disabled'}><span>👁</span>Show</button>
         <button class="tool ${r.bestView ? 'on' : ''}" id="tBest" ${d && !['best', 'great', 'book'].includes(d.cls) ? '' : 'disabled'}><span>★</span>Best</button>
         <button class="tool ${r.retry ? 'on' : ''}" id="tRetry" ${canRetry || r.retry ? '' : 'disabled'}><span>↻</span>Retry</button>
+        <button class="tool ${drawMode ? 'on' : ''}" id="tPen"><span>✏️</span>Draw</button>
         <button class="btn primary nextbtn" data-n="1" ${ply >= n && !r.retry && !r.bestView ? 'disabled' : ''}>${ply === 0 ? 'Start Review' : r.retry || r.bestView ? 'Continue' : 'Next'}</button>
       </div>
       <section class="card rv-sum">
@@ -612,7 +674,8 @@
       r.retry = r.retry ? null : { fen: r.fens[ply - 1], sel: null, msg: '', ok: false, last: ply > 1 ? rec.moves[ply - 2] : null };
       renderReview();
     };
-    if (r.retry) app.querySelectorAll('.sq').forEach(el => el.onclick = () => retryClick(+el.dataset.sq));
+    bindBoard(r.retry ? retryClick : null, renderReview);
+    $('#tPen').onclick = () => { drawMode = !drawMode; drawFrom = null; renderReview(); };
     const svg = app.querySelector('.graph');
     svg.onclick = e => { const rc = svg.getBoundingClientRect(); exitModes(); R.ply = Math.round(((e.clientX - rc.left) / rc.width) * n); renderReview(); };
     scrollMoves(app.querySelector('.strip .moves'), app.querySelector('.rv.cur') || app.querySelector('.strip .moves .n'));
@@ -645,6 +708,7 @@
   }
   function exitModes() { if (R) { R.retry = null; R.bestView = false; } }
   function step(k) {
+    clearMarks();
     if (!R) return; const n = R.rec.sans.length;
     if (R.retry || R.bestView) { exitModes(); if (k === 1) { renderReview(); return; } }
     const prev = R.ply;

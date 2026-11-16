@@ -41,12 +41,14 @@
         document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reg.update());
       }).catch(() => {});
       let reloaded = false;
+      const hadController = !!navigator.serviceWorker.controller; // first install is not an "update"
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloaded || !navigator.serviceWorker.controller) return;
+        if (reloaded || !hadController) return;
         reloaded = true;
         const b = document.createElement('div'); b.className = 'updbar';
-        b.innerHTML = 'A new version is ready. <button>Refresh</button>';
+        b.innerHTML = '<span>A new version is ready.</span><button>Refresh</button><button class="x" aria-label="Dismiss">×</button>';
         b.querySelector('button').onclick = () => location.reload();
+        b.querySelector('.x').onclick = () => b.remove();
         document.body.appendChild(b);
       });
     }
