@@ -147,11 +147,38 @@
       </div>
       <section class="card"><h2>League ladder</h2><div class="ladder">${LEAGUES.map((L, i) => `
         <div class="rung ${i === S.leagueIdx ? 'cur' : ''} ${i < S.leagueIdx ? 'past' : ''}" style="--c:${L.color}">
-          <div class="ic">${L.icon}</div><div>${L.name}</div><small>${L.base - 120}–${L.base + 120}</small></div>`).join('')}</div></section>`;
+          <div class="ic">${L.icon}</div><div>${L.name}</div><small>${L.base - 120}–${L.base + 120}</small></div>`).join('')}</div></section>
+      <section class="card"><h2>Theme</h2><p class="muted">Pick a look for the app and the board.</p>${themePicker()}</section>`;
+    bindThemes(app);
     $('#playLeague').onclick = playLeague;
     $('#seeLeague').onclick = () => nav('league');
     $('#goQuick').onclick = () => nav('quick');
     $('#goLb').onclick = () => nav('leaderboard');
+  }
+
+  // ---------- themes ----------
+  const THEMES = [
+    { id: 'midnight', name: 'Midnight', lt: '#dfe6ee', dk: '#6383a6', accent: '#3ec7c2', hdr: '#0b0f18' },
+    { id: 'walnut', name: 'Walnut', lt: '#f0d9b5', dk: '#b58863', accent: '#e09f3e', hdr: '#140f0b' },
+    { id: 'royal', name: 'Royal', lt: '#ece4f7', dk: '#8a6fb3', accent: '#a777ff', hdr: '#100c16' },
+    { id: 'forest', name: 'Forest', lt: '#ebecd0', dk: '#739552', accent: '#81b64c', hdr: '#1b1a18' }
+  ];
+  function setTheme(id) {
+    document.documentElement.dataset.theme = id;
+    try { localStorage.setItem('ca-theme', id); } catch (e) {}
+    const t = THEMES.find(x => x.id === id), m = document.querySelector('meta[name="theme-color"]');
+    if (t && m) m.content = t.hdr;
+  }
+  const curTheme = () => document.documentElement.dataset.theme || 'midnight';
+  setTheme(curTheme());
+  const themePicker = () => `<div class="themes">${THEMES.map(t => `<button class="theme-opt ${t.id === curTheme() ? 'on' : ''}" data-theme="${t.id}">
+      <div class="mini">${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<span style="background:${(i + (i >> 2)) % 2 ? t.dk : t.lt}"></span>`).join('')}</div>
+      <span class="dot" style="background:${t.accent}"></span>${t.name}</button>`).join('')}</div>`;
+  function bindThemes(root) {
+    root.querySelectorAll('.theme-opt').forEach(b => b.onclick = () => {
+      setTheme(b.dataset.theme);
+      root.querySelectorAll('.theme-opt').forEach(x => x.classList.toggle('on', x === b));
+    });
   }
 
   // ---------- league ----------
