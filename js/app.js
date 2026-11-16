@@ -190,7 +190,7 @@
     let color = 'w', rated = true, sel = BOTS[0].id;
     app.innerHTML = `<section class="card"><h2>Quick match</h2>
       <div class="row"><label>Color</label><div class="seg" id="col"><button data-v="w" class="on">♔ White</button><button data-v="r">🎲 Random</button><button data-v="b">♚ Black</button></div>
-      <label class="chk"><input type="checkbox" id="rated" checked> Rated</label></div>
+      <label class="switch"><input type="checkbox" id="rated" role="switch" checked><span class="track"><span class="knob"></span></span><span class="swl">Rated</span></label></div>
       <div class="row tcrow"><label>Time</label>${tcPicker()}</div>
       <div class="bots">${LEAGUES.map((L, li) => `<div class="botgrp"><h4 style="color:${L.color}">${L.icon} ${L.name}</h4>${BOTS.filter(b => b.league === li).map(b =>
         `<button class="bot ${b.id === sel ? 'on' : ''}" data-id="${b.id}"><span>${b.avatar}</span><b>${esc(b.name)}</b><small>${League.rating(b.id)}</small></button>`).join('')}</div>`).join('')}</div>

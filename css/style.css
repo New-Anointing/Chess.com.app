@@ -225,3 +225,11 @@ html { -webkit-tap-highlight-color:transparent; } body { overscroll-behavior-y:n
   .rv-mode main { padding-bottom:12px; }
   .updbar { bottom:calc(76px + env(safe-area-inset-bottom)); }
 }
+
+.switch { display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none; font-weight:600; }
+.switch input { position:absolute; opacity:0; width:1px; height:1px; }
+.switch .track { position:relative; width:50px; height:28px; border-radius:14px; background:#55524e; transition:background .2s; box-shadow:inset 0 1px 3px #0006; }
+.switch .knob { position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 2px 4px #0006; transition:transform .2s cubic-bezier(.3,1.4,.5,1); }
+.switch input:checked + .track { background:var(--accent); }
+.switch input:checked + .track .knob { transform:translateX(22px); }
+.switch input:focus-visible + .track { outline:2px solid #fff; outline-offset:2px; }
