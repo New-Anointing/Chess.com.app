@@ -93,16 +93,23 @@
   sndBtn.onclick = () => { Sound.toggle(); setSndIcon(); }; setSndIcon();
 
   // ---------- navigation ----------
+  // One page-entry animation at a time; removed only after it has fully finished so it never replays.
+  let enterTimer = null;
+  function playEnter(cls) {
+    clearTimeout(enterTimer);
+    app.classList.remove('enter', 'slide-l', 'slide-r');
+    void app.offsetWidth;
+    app.classList.add(cls);
+    enterTimer = setTimeout(() => app.classList.remove(cls), 900);
+  }
   const VIEWS = ['home', 'league', 'quick', 'leaderboard', 'history'];
   let curView = 'home';
   function nav(view, dir) {
     curView = view;
-    app.classList.remove('slide-l', 'slide-r');
-    if (dir) { void app.offsetWidth; app.classList.add(dir > 0 ? 'slide-l' : 'slide-r'); setTimeout(() => app.classList.remove('slide-l', 'slide-r'), 400); }
+    playEnter(dir ? (dir > 0 ? 'slide-l' : 'slide-r') : 'enter');
     R = null;
     document.body.classList.remove('rv-mode');
     window.scrollTo(0, 0);
-    app.classList.remove('enter'); void app.offsetWidth; app.classList.add('enter'); setTimeout(() => app.classList.remove('enter'), 700);
     document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     ({ home, league, quick, leaderboard, history })[view]();
   }
@@ -331,7 +338,7 @@
       tc: T, time: { w: T.base * 1000, b: T.base * 1000 }, turnStart: Date.now() };
     clearInterval(clockTimer);
     if (T.base) clockTimer = setInterval(tick, 100);
-    app.classList.add('enter'); setTimeout(() => app.classList.remove('enter'), 700);
+    playEnter('enter');
     renderGame();
     Sound.play('start');
     if (G.chess.turn !== color) setTimeout(botMove, 400);
