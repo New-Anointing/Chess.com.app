@@ -623,13 +623,7 @@
       list += `<span class="rv ${j + 1 === ply ? 'cur' : ''} ${dj ? 'c-' + dj.cls : ''}" data-p="${j + 1}">${showIc ? clsIcon(dj.cls, 'sm') : ''}${figSan(rec.sans[j], col)}</span>`;
     }
     // ---- summary graph ----
-    const W = 600, H = 110, pts = [];
-    for (let i = 0; i <= n; i++) if (r.evals[i] != null) pts.push(`${(i / Math.max(1, n)) * W},${H - (winPct(clampCp(r.evals[i])) / 100) * H}`);
-    const graph = `<svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H}" fill="#2b2a28"/>
-      ${pts.length > 1 ? `<polygon points="0,${H} ${pts.join(' ')} ${pts[pts.length - 1].split(',')[0]},${H}" fill="#f0f0f0"/>` : ''}
-      <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-dasharray="4"/>
-      ${r.data.map((x, i) => x && (BAD.includes(x.cls) || x.cls === 'great') ? `<circle cx="${((i + 1) / n) * W}" cy="${H - (winPct(clampCp(r.evals[i + 1] ?? 0)) / 100) * H}" r="5" fill="${CLS[x.cls].color}"/>` : '').join('')}
-      <line x1="${(ply / Math.max(1, n)) * W}" y1="0" x2="${(ply / Math.max(1, n)) * W}" y2="${H}" stroke="#81b64c" stroke-width="2"/></svg>`;
+    const graph = graphHTML(r, n, ply);
     const counts = ['great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     const canRetry = d && !['best', 'great', 'book'].includes(d.cls);
 
@@ -676,10 +670,53 @@
     };
     bindBoard(r.retry ? retryClick : null, renderReview);
     $('#tPen').onclick = () => { drawMode = !drawMode; drawFrom = null; renderReview(); };
-    const svg = app.querySelector('.graph');
-    svg.onclick = e => { const rc = svg.getBoundingClientRect(); exitModes(); R.ply = Math.round(((e.clientX - rc.left) / rc.width) * n); renderReview(); };
+    const evg = $('#evg');
+    if (evg) {
+      const seek = e => { const g = $('#evg'); if (!g || !R) return; const rc = g.getBoundingClientRect(); const p = Math.max(0, Math.min(n, Math.round(((e.clientX - rc.left) / rc.width - .015) / .97 * n))); if (p !== R.ply) { exitModes(); clearMarks(); R.ply = p; renderReview(); } };
+      evg.onpointerdown = e => { graphDrag = true; seek(e); };
+    }
     scrollMoves(app.querySelector('.strip .moves'), app.querySelector('.rv.cur') || app.querySelector('.strip .moves .n'));
     if (r.anim) { animateMove(r.anim, flip); r.anim = null; }
+  }
+
+  // Advantage graph: smooth area chart (SVG) + round HTML markers so nothing gets stretched.
+  let graphDrag = false;
+  window.addEventListener('pointermove', e => { if (graphDrag && R) { const g = $('#evg'); if (g) g.onpointerdown && seekGraph(e); } });
+  window.addEventListener('pointerup', () => { graphDrag = false; });
+  window.addEventListener('pointercancel', () => { graphDrag = false; });
+  function seekGraph(e) {
+    const g = $('#evg'); if (!g || !R) return;
+    const n = R.rec.sans.length, rc = g.getBoundingClientRect();
+    const p = Math.max(0, Math.min(n, Math.round(((e.clientX - rc.left) / rc.width - .015) / .97 * n)));
+    if (p !== R.ply) { exitModes(); clearMarks(); R.ply = p; renderReview(); }
+  }
+  function graphHTML(r, n, ply) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) if (r.evals[i] != null) pts.push([15 + (n ? i / n * 970 : 0), 100 - Math.max(8, Math.min(92, winPct(clampCp(r.evals[i]))))]);
+    let area = '', line = '';
+    if (pts.length > 1) {
+      pts.unshift([0, pts[0][1]]); pts.push([1000, pts[pts.length - 1][1]]);
+      let d = `M${pts[0][0]},${pts[0][1]}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2, t = 0.18;
+        d += ` C${p1[0] + (p2[0] - p0[0]) * t},${p1[1] + (p2[1] - p0[1]) * t} ${p2[0] - (p3[0] - p1[0]) * t},${p2[1] - (p3[1] - p1[1]) * t} ${p2[0]},${p2[1]}`;
+      }
+      line = d; area = `${d} L${pts[pts.length - 1][0]},100 L0,100 Z`;
+    }
+    const y = i => r.evals[i] != null ? 100 - Math.max(8, Math.min(92, winPct(clampCp(r.evals[i])))) : 50;
+    const x = i => 1.5 + (n ? i / n * 97 : 0);
+    const dots = r.data.map((dd, i) => dd && (BAD.includes(dd.cls) || dd.cls === 'great')
+      ? `<span class="gdot ${dd.cls}" style="left:${x(i + 1)}%;top:${y(i + 1)}%;background:${CLS[dd.cls].color}" title="${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'} ${r.rec.sans[i]} · ${CLS[dd.cls].label}"></span>` : '').join('');
+    return `<div class="evgraph" id="evg">
+      <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+        ${area ? `<path d="${area}" class="ga"/><path d="${line}" class="gl"/>` : ''}
+        <line x1="0" y1="50" x2="1000" y2="50" class="gm"/>
+      </svg>
+      ${dots}
+      <div class="gcur" style="left:${x(ply)}%"></div>
+      <span class="gpt" style="left:${x(ply)}%;top:${y(ply)}%"></span>
+    </div>
+    <div class="glegend"><span><i style="background:${CLS.great.color}"></i>Great</span><span><i style="background:${CLS.inaccuracy.color}"></i>Inaccuracy</span><span><i style="background:${CLS.mistake.color}"></i>Mistake</span><span><i style="background:${CLS.blunder.color}"></i>Blunder</span></div>`;
   }
 
   function retryClick(sq) {
