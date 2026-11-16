@@ -18,3 +18,15 @@ It's a plain HTML/JS app with no dependencies and no build step. Open `index.htm
 - `js/ai.js`: alpha-beta search with quiescence, piece-square evaluation, skill model and analysis.
 - `js/league.js`: bots, ratings, seasons, standings, persistence.
 - `js/app.js`: UI.
+
+## Install as a phone app
+The app is an installable web app (PWA) and is hosted with GitHub Pages.
+1. Open the site in Safari (iPhone) or Chrome (Android).
+2. iPhone: Share → **Add to Home Screen**. Android: menu (⋮) → **Install app** / **Add to Home screen**.
+
+It opens full-screen from its icon and works offline.
+
+### How updates work
+Push changes to the branch GitHub Pages deploys from. The next time the app opens with internet, the service worker (`sw.js`) loads the newest files and caches them for offline use. Nothing needs to be reinstalled.
+If someone already has the app open when an update arrives, a "New version is ready – Refresh" banner appears.
+When you add a new file to the app, also add it to the `FILES` list in `sw.js` so it's available offline.
