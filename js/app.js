@@ -606,7 +606,8 @@
     setTimeout(() => {
       if (R !== r) return;
       try {
-        r.coach[ply] = Coach.explain(r.fens[ply - 1], r.rec.moves[ply - 1], { cls: d.cls === 'great' ? 'best' : d.cls, best: d.best, bestScore: d.bestScore, playedScore: d.playedScore, ply: ply - 1, you: d.color === r.rec.color, name: r.rec.opp });
+        const pc = ply > 1 ? new Chess(r.fens[ply - 2]) : null, prev = pc ? pc.moves().find(x => sameMove(x, r.rec.moves[ply - 2])) : null;
+        r.coach[ply] = Coach.explain(r.fens[ply - 1], r.rec.moves[ply - 1], { prev, cls: d.cls, best: d.best, bestScore: d.bestScore, playedScore: d.playedScore, ply: ply - 1, you: d.color === r.rec.color, name: r.rec.opp });
       } catch (e) { r.coach[ply] = { text: [d.cls === 'best' ? 'This is the best move.' : `Best was ${d.bestSan}.`], line: null }; }
       if (R === r && R.ply === ply) renderReview();
     }, 260); // wait for the piece slide to finish so the calculation can't make it stutter
@@ -663,7 +664,7 @@
       title = `${figSan(rec.sans[ply - 1], d.color)} ${lab}`; icon = clsIcon(d.cls);
       const lead = /^\S+ is (the best move here|an? (inaccuracy|mistake|blunder))\.$/;
       body = ex ? ex.text.filter(t => !lead.test(t)).join(' ') : '<span class="muted">Coach is thinking…</span>';
-      if (d.cls === 'great') body = (ex ? ex.text.filter(t => !lead.test(t)).join(' ') : '') + ' It was the only move that kept the advantage.';
+      
     } else {
       title = 'Game Review'; icon = '<span class="cicon" style="background:#81b64c">♞</span>';
       body = !r.done && !r.data.length ? 'Analyzing your game…'
