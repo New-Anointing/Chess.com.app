@@ -339,7 +339,8 @@
     let bdg = '';
     if (badge) {
       const v = flip ? 63 - badge.sq : badge.sq;
-      bdg = `<div class="sqbadge" style="left:${((v & 7) + 1) * 12.5}%;top:${(v >> 3) * 12.5}%;background:${badge.color}">${badge.icon}</div>`;
+      const tx = (v & 7) === 7 ? -100 : -62, ty = (v >> 3) === 0 ? 0 : -38; // keep the badge inside the board on edge squares
+      bdg = `<div class="sqbadge" style="left:${((v & 7) + 1) * 12.5}%;top:${(v >> 3) * 12.5}%;transform:translate(${tx}%,${ty}%);background:${badge.color}">${badge.icon}</div>`;
     }
     return `<div class="board">${h}${svg}${bdg}</div>`;
   }
@@ -690,8 +691,8 @@
         <div class="coachav">${pieceSVG('N')}</div>
         <div class="bubble">
           <div class="bh">${icon}<b>${title}</b><span class="evchip ${chipDark ? 'dark' : ''}">${chip}</span></div>
-          <p>${body}</p>
-          ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}
+          <div class="bbody"><p>${body}</p>
+          ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}</div>
         </div>
       </div>
       <div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${fmtEval(evNow)}</span></div>
@@ -717,7 +718,7 @@
     if (fresh) app.innerHTML = html;
     else {
       const t = document.createElement('div'); t.innerHTML = html; morph(existing, t.firstElementChild);
-      if (r.lastShownPly !== ply) { const bp = app.querySelector('.bubble'); bp && bp.animate && bp.animate([{ opacity: .55, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
+      if (r.lastShownPly !== ply) { const bb = app.querySelector('.bbody'); if (bb) bb.scrollTop = 0; const bp = app.querySelector('.bubble'); bp && bp.animate && bp.animate([{ opacity: .55, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
     }
     r.lastShownPly = ply;
 

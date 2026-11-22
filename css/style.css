@@ -306,11 +306,18 @@ main#app { overflow-x:clip; }
 
 /* smooth review stepping */
 .progress[hidden] { display:none; }
-.rv-wrap .coachrow { min-height:178px; } /* reserve space so the board never shifts when the text length changes */
-@media (max-width: 820px) { .rv-wrap .coachrow { min-height:172px; } }
+.rv-wrap .coachrow { min-height:0; } /* reserve space so the board never shifts when the text length changes */
+
 .tint { transition:background-color .2s ease; }
 .sqbadge { transition:left .22s cubic-bezier(.2,.8,.3,1), top .22s cubic-bezier(.2,.8,.3,1), background-color .2s; }
 .evalbar div { transition:height .35s cubic-bezier(.2,.8,.3,1); }
 .evchip { transition:background-color .2s, color .2s; }
 .strip .moves { scroll-behavior:smooth; }
 .sq { transition:background-color .15s; }
+
+/* fixed-size coach bubble: never grows or shrinks between moves */
+.rv-wrap .bubble { height:158px; min-height:0; display:flex; flex-direction:column; }
+.rv-wrap .bubble .bh { flex:none; }
+.rv-wrap .bbody { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; margin-right:-6px; padding-right:6px;
+  -webkit-mask-image:linear-gradient(#000 calc(100% - 14px), transparent); mask-image:linear-gradient(#000 calc(100% - 14px), transparent); }
+@media (max-width: 820px) { .rv-wrap .bubble { height:150px; } }
