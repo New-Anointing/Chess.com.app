@@ -303,3 +303,14 @@ main#app { overflow-x:clip; }
   body > .nav { transform:translateZ(0); will-change:transform; }
   .rv-mode > .nav { display:none; }
 }
+
+/* smooth review stepping */
+.progress[hidden] { display:none; }
+.rv-wrap .coachrow { min-height:178px; } /* reserve space so the board never shifts when the text length changes */
+@media (max-width: 820px) { .rv-wrap .coachrow { min-height:172px; } }
+.tint { transition:background-color .2s ease; }
+.sqbadge { transition:left .22s cubic-bezier(.2,.8,.3,1), top .22s cubic-bezier(.2,.8,.3,1), background-color .2s; }
+.evalbar div { transition:height .35s cubic-bezier(.2,.8,.3,1); }
+.evchip { transition:background-color .2s, color .2s; }
+.strip .moves { scroll-behavior:smooth; }
+.sq { transition:background-color .15s; }

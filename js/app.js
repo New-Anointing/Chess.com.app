@@ -73,7 +73,20 @@
     const toSq = board.querySelector(`[data-sq="${m.to}"]`); toSq && toSq.classList.add('landed');
   }
   // Keep the current move visible inside the move list without scrolling the page.
-  function scrollMoves(box, el) {
+  // Minimal DOM morph: update the existing page in place instead of rebuilding it,
+  // so elements (board squares, bubble, eval bar) persist and CSS transitions run smoothly.
+  function morph(from, to) {
+    if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) { from.replaceWith(to.cloneNode(true)); return; }
+    if (from.nodeType === 3 || from.nodeType === 8) { if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue; return; }
+    if (from.nodeType !== 1) return;
+    for (const a of [...from.attributes]) if (!to.hasAttribute(a.name)) from.removeAttribute(a.name);
+    for (const a of [...to.attributes]) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
+    const fc = [...from.childNodes], tc = [...to.childNodes];
+    for (let i = 0; i < tc.length; i++) { if (i < fc.length) morph(fc[i], tc[i]); else from.appendChild(tc[i].cloneNode(true)); }
+    for (let i = tc.length; i < fc.length; i++) fc[i].remove();
+  }
+  function scrollMoves(box, el, smooth) {
+    if (smooth && box && el && box.scrollTo) { box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' }); return; }
     if (!box) return;
     if (!el) { box.scrollTop = box.scrollHeight; box.scrollLeft = box.scrollWidth; return; }
     box.scrollLeft = el.offsetLeft - box.clientWidth / 2 + el.offsetWidth / 2;
@@ -593,7 +606,7 @@
         r.coach[ply] = Coach.explain(r.fens[ply - 1], r.rec.moves[ply - 1], { cls: d.cls === 'great' ? 'best' : d.cls, best: d.best, bestScore: d.bestScore, playedScore: d.playedScore, ply: ply - 1, you: d.color === r.rec.color, name: r.rec.opp });
       } catch (e) { r.coach[ply] = { text: [d.cls === 'best' ? 'This is the best move.' : `Best was ${d.bestSan}.`], line: null }; }
       if (R === r && R.ply === ply) renderReview();
-    }, 30);
+    }, 260); // wait for the piece slide to finish so the calculation can't make it stutter
   }
 
   function renderReview() {
@@ -643,7 +656,7 @@
         if (tints[ex.reply.to] == null) tints[ex.reply.to] = col + '80';
       }
       boardOpts = { flip, last: m, arrows, tints, badge: { sq: m.to, color: k.color, icon: k.icon } };
-      const lab = d.cls === 'best' ? 'is the best move' : d.cls === 'great' ? 'is a great move' : d.cls === 'book' ? 'is a book move' : `is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()}`;
+      const lab = d.cls === 'best' ? 'is the best move' : d.cls === 'great' ? 'is a great move' : d.cls === 'book' ? 'is a book move' : `is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()}${['good', 'excellent'].includes(d.cls) ? ' move' : ''}`;
       title = `${figSan(rec.sans[ply - 1], d.color)} ${lab}`; icon = clsIcon(d.cls);
       const lead = /^\S+ is (the best move here|an? (inaccuracy|mistake|blunder))\.$/;
       body = ex ? ex.text.filter(t => !lead.test(t)).join(' ') : '<span class="muted">Coach is thinking…</span>';
@@ -670,12 +683,12 @@
     const counts = ['great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     const canRetry = d && !['best', 'great', 'book'].includes(d.cls);
 
-    app.innerHTML = `<div class="rv-wrap">
+    const html = `<div class="rv-wrap">
       <div class="rv-top"><button class="icbtn" id="rvBack" aria-label="Back">←</button><h2>Game Review</h2><button class="icbtn" id="rvSnd" aria-label="Sound">${Sound.on ? '🔊' : '🔇'}</button></div>
-      ${!r.done ? `<div class="progress"><div id="prog" style="width:${100 * r.data.length / Math.max(1, n)}%"></div></div>` : ''}
+      <div class="progress" ${r.done ? 'hidden' : ''}><div id="prog" style="width:${100 * r.data.length / Math.max(1, n)}%"></div></div>
       <div class="coachrow">
         <div class="coachav">${pieceSVG('N')}</div>
-        <div class="bubble" key="${ply}">
+        <div class="bubble">
           <div class="bh">${icon}<b>${title}</b><span class="evchip ${chipDark ? 'dark' : ''}">${chip}</span></div>
           <p>${body}</p>
           ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}
@@ -699,6 +712,14 @@
           ${counts.map(k => `<tr><td>${clsIcon(k, 'sm')} ${CLS[k].label}</td><td>${sides[you].cnt[k] || 0}</td><td>${sides[opp].cnt[k] || 0}</td></tr>`).join('')}
         </tbody></table>
       </section></div>`;
+    const existing = app.firstElementChild;
+    const fresh = !(existing && existing.classList.contains('rv-wrap'));
+    if (fresh) app.innerHTML = html;
+    else {
+      const t = document.createElement('div'); t.innerHTML = html; morph(existing, t.firstElementChild);
+      if (r.lastShownPly !== ply) { const bp = app.querySelector('.bubble'); bp && bp.animate && bp.animate([{ opacity: .55, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
+    }
+    r.lastShownPly = ply;
 
     app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => step(+b.dataset.n));
     app.querySelectorAll('.rv').forEach(b => b.onclick = () => { exitModes(); R.ply = +b.dataset.p; renderReview(); });
@@ -718,7 +739,9 @@
       const seek = e => { const g = $('#evg'); if (!g || !R) return; const rc = g.getBoundingClientRect(); const p = Math.max(0, Math.min(n, Math.round(((e.clientX - rc.left) / rc.width - .015) / .97 * n))); if (p !== R.ply) { exitModes(); clearMarks(); R.ply = p; renderReview(); } };
       evg.onpointerdown = e => { graphDrag = true; seek(e); };
     }
-    scrollMoves(app.querySelector('.strip .moves'), app.querySelector('.rv.cur') || app.querySelector('.strip .moves .n'));
+    scrollMoves(app.querySelector('.strip .moves'), app.querySelector('.rv.cur') || app.querySelector('.strip .moves .n'), !fresh);
+    // Prepare the next move's explanation in the background, after this animation, so Next feels instant.
+    if (r.data[ply] && !r.coach[ply + 1]) setTimeout(() => R === r && ensureCoach(r, ply + 1), 450);
     if (r.anim) { animateMove(r.anim, flip); r.anim = null; }
   }
 
