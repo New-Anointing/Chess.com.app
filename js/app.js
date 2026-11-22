@@ -586,7 +586,9 @@
     let cls = isBest || cpLoss <= 5 ? 'best' : cpLoss <= 30 ? 'excellent' : cpLoss <= 70 ? 'good' : cpLoss <= 140 ? 'inaccuracy' : cpLoss <= 280 ? 'mistake' : 'blunder';
     if (i < 6 && cpLoss <= 40) cls = 'book';
     // "Great": the only good move in the position.
-    if (cls === 'best' && i >= 6 && a.scores.length > 1 && a.scores[1].score < a.bestScore - 150 && clampCp(a.bestScore) < 800 && !m.promo) cls = 'great';
+    // Not for forced or obvious moves: escaping check or taking back a piece that was just captured.
+    const prev = i > 0 ? rec.moves[i - 1] : null, recapture = prev && m.to === prev.to && new Chess(r.fens[i - 1]).board[prev.to];
+    if (cls === 'best' && i >= 6 && a.scores.length > 1 && a.scores[1].score < a.bestScore - 150 && clampCp(a.bestScore) < 800 && !m.promo && !c.inCheck() && !recapture) cls = 'great';
     if ((cls === 'mistake' || cls === 'blunder') && clampCp(ps) > 500) cls = 'inaccuracy';
     r.data[i] = { bestScore: a.bestScore, playedScore: ps, cls, cpLoss, wpLoss, acc: Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * wpLoss) - 3.1669)),
       bestSan: c.san(a.best), best: a.best, color: c.turn,
@@ -695,7 +697,7 @@
           ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}</div>
         </div>
       </div>
-      <div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${fmtEval(evNow)}</span></div>
+      <div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${AI.isMate(evNow) ? fmtEval(evNow) : Math.abs(evNow) >= 1000 ? Math.round(Math.abs(evNow) / 100) : (Math.abs(evNow) / 100).toFixed(1)}</span></div>
         ${boardHTML(c, boardOpts)}</div>
       <div class="strip"><button class="icbtn" data-n="-1" aria-label="Previous">‹</button><div class="moves">${list}</div><button class="icbtn" data-n="1" aria-label="Next move">›</button></div>
       <div class="rv-bottom">

@@ -23,6 +23,7 @@
       if (attackers.length) {
         const minA = Math.min(...attackers.map(x => V[lc(x.piece)]));
         if (!g.attacked(m.to, mover) || minA < V[t]) F.hangs = true;
+        if (m.captured && V[lc(m.captured)] >= V[t]) { F.hangs = false; F.trade = true; }
       }
     }
     g.turn = mover; // look at what the moved piece now attacks
@@ -96,6 +97,8 @@
       out.push(`${pSan} is ${label}.`);
       if (AI.isMate(info.playedScore) && info.playedScore < 0)
         out.push(`It walks into a forced checkmate: ${oppN} can begin with ${replySan}.`);
+      else if (reply && reply.captured && reply.to === pm.to && pF.trade)
+        out.push(`It trades ${own} ${NAME[pF.piece]} for the ${NAME[pF.captures]} (${oppN} takes back with ${replySan}), which gives away some of ${own} advantage.`);
       else if (reply && reply.captured && reply.to === pm.to && pF.hangs)
         out.push(`It leaves the ${NAME[pF.piece]} on ${pF.to} unprotected, so ${oppN} can simply take it with ${replySan}.`);
       else if (reply && rF && rF.fork)
