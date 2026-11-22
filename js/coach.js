@@ -118,6 +118,7 @@
       const big = F.threats.filter(x => V[x.piece] >= 3);
       F.fork = big.length >= 2 || (F.check && big.length >= 1);
       F.forkTargets = big;
+      if (F.fork) F.forkLines = { from: m.to, to: (F.check ? [g.kingSq(opp)] : []).concat(big.map(x => Chess.sqIdx(x.sq))) };
       F.tactics = lineTactics(b, m.to, g);
       F.battery = battery(b, m.to);
       // discovered attack: a different piece of ours now hits something big
@@ -270,7 +271,11 @@
       else if (generic(bIdeas) || bIdeas[0] === pIdeas[0]) out.push(`${you ? 'Your' : 'Their'} better option was ${bSan}.`);
       else out.push(`${you ? 'Your' : 'Their'} better option was ${bSan}, which ${two(bIdeas)}${B.delta > P.delta + 1 && B.delta >= 1 && !bF.captures ? ` and wins ${matPhrase(B.delta)}` : ''}.`);
     }
-    return { reply: reply ? { from: reply.from, to: reply.to } : null, text: out, line: cls === 'best' || cls === 'book' || cls === 'great' || pF.mate ? null : B.sans.slice(0, 3) };
+    const forks = [];
+    if (pF.forkLines) forks.push({ role: 'played', ...pF.forkLines });
+    if (rF && rF.forkLines) forks.push({ role: 'reply', ...rF.forkLines });
+    if (!same_ && bF.forkLines) forks.push({ role: 'best', ...bF.forkLines });
+    return { forks, reply: reply ? { from: reply.from, to: reply.to } : null, text: out, line: cls === 'best' || cls === 'book' || cls === 'great' || pF.mate ? null : B.sans.slice(0, 3) };
   }
 
   root.Coach = { explain };

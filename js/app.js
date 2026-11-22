@@ -280,7 +280,7 @@
   }
 
   // ---------- board rendering ----------
-  const ARROW = { best: '#81b64c', alt: '#f0a92b', next: '#4fa8e0', threat: '#e0503c', user: '#f5a623' };
+  const ARROW = { fork: '#c86bff', best: '#81b64c', alt: '#f0a92b', next: '#4fa8e0', threat: '#e0503c', user: '#f5a623' };
   let marks = { arrows: [], hl: [] }, drawMode = false, drawFrom = null;
   const clearMarks = () => { marks = { arrows: [], hl: [] }; drawFrom = null; };
   function toggleMark(a, b) {
@@ -304,15 +304,15 @@
       if (onSquare) onSquare(sq); else if (had) rerender();
     });
   }
-  function arrowSVG(from, to, color, flip) {
+  function arrowSVG(from, to, color, flip, dash) {
     const c = q => { const v = flip ? 63 - q : q; return [(v & 7) + .5, (v >> 3) + .5]; };
     const A = c(from), B = c(to), dx = B[0] - A[0], dy = B[1] - A[1];
     const pts = [A];
-    if (Math.abs(dx) + Math.abs(dy) === 3 && Math.abs(dx) && Math.abs(dy)) pts.push(Math.abs(dy) > Math.abs(dx) ? [A[0], B[1]] : [B[0], A[1]]); // knight: L-shape
+    if (!dash && Math.abs(dx) + Math.abs(dy) === 3 && Math.abs(dx) && Math.abs(dy)) pts.push(Math.abs(dy) > Math.abs(dx) ? [A[0], B[1]] : [B[0], A[1]]); // knight: L-shape
     const P = pts[pts.length - 1], L = Math.hypot(B[0] - P[0], B[1] - P[1]), ux = (B[0] - P[0]) / L, uy = (B[1] - P[1]) / L;
     const tip = [B[0] - ux * .1, B[1] - uy * .1], hl = .5, hw = .37, base = [tip[0] - ux * hl, tip[1] - uy * hl];
     const shaft = pts.concat([base]).map(q => q.join(',')).join(' ');
-    return `<g opacity=".8"><polyline points="${shaft}" fill="none" stroke="${color}" stroke-width=".27" stroke-linejoin="miter"/>
+    return `<g opacity=".85"><polyline points="${shaft}" fill="none" stroke="${color}" stroke-width="${dash ? .17 : .27}" stroke-linejoin="miter" ${dash ? 'stroke-dasharray=".22 .13"' : ''}/>
       <polygon points="${tip.join(',')} ${base[0] - uy * hw},${base[1] + ux * hw} ${base[0] + uy * hw},${base[1] - ux * hw}" fill="${color}"/></g>`;
   }
   function boardHTML(chess, opts) {
@@ -335,7 +335,7 @@
       h += `<div class="${cls.join(' ')}" data-sq="${sq}">${tint}${coordR}${coordF}${p ? `<span class="pc" data-p="${p}">${pieceSVG(p)}</span>` : ''}</div>`;
     }
     const all = arrows.concat(arrow ? [{ ...arrow, color: '#81b64c' }] : []);
-    const svg = all.length ? `<svg class="arrows" viewBox="0 0 8 8">${all.map(x => arrowSVG(x.from, x.to, x.color, flip)).join('')}</svg>` : '';
+    const svg = all.length ? `<svg class="arrows" viewBox="0 0 8 8">${all.map(x => arrowSVG(x.from, x.to, x.color, flip, x.dash)).join('')}</svg>` : '';
     let bdg = '';
     if (badge) {
       const v = flip ? 63 - badge.sq : badge.sq;
@@ -613,6 +613,13 @@
     }, 260); // wait for the piece slide to finish so the calculation can't make it stutter
   }
 
+  let forkTagFlag = false;
+  // Lines from the forking piece to every piece it attacks at the same time.
+  function forkMarks(fk, arrows, tints) {
+    forkTagFlag = true;
+    for (const t of fk.to) { arrows.push({ from: fk.from, to: t, color: ARROW.fork, dash: true }); if (tints[t] == null) tints[t] = ARROW.fork + '55'; }
+    if (tints[fk.from] == null) tints[fk.from] = ARROW.fork + '40';
+  }
   function renderReview() {
     const r = R, rec = r.rec, n = rec.sans.length, ply = r.ply;
     document.body.classList.add('rv-mode');
@@ -627,6 +634,7 @@
     if (d) ensureCoach(r, ply);
 
     // ---- board state ----
+    forkTagFlag = false;
     let fen = r.fens[ply], boardOpts = { flip, last: m }, title = '', body = '', icon = '', chip = fmtEval(evNow), chipDark = evNow < 0;
     if (r.retry) {
       const rt = r.retry, cb = new Chess(rt.fen), legal = cb.moves();
@@ -639,7 +647,9 @@
       const c0 = new Chess(r.fens[ply - 1]), bm = c0.moves().find(x => sameMove(x, d.best));
       c0.make(bm); fen = c0.fen();
       const k = CLS.best;
-      boardOpts = { flip, last: d.best, tints: { [d.best.from]: k.color + '99', [d.best.to]: k.color + 'cc' }, badge: { sq: d.best.to, color: k.color, icon: k.icon } };
+      const bt = { [d.best.from]: k.color + '99', [d.best.to]: k.color + 'cc' }, ba = [];
+      if (ex && ex.forks) ex.forks.filter(f => f.role === 'best').forEach(f => forkMarks(f, ba, bt));
+      boardOpts = { flip, last: d.best, arrows: ba, tints: bt, badge: { sq: d.best.to, color: k.color, icon: k.icon } };
       title = `${figSan(d.bestSan, d.color)} is best`; icon = clsIcon('best');
       body = ex && ex.line ? `Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}` : 'This was the strongest move in the position.';
       chip = fmtEval((d.color === 'w' ? 1 : -1) * d.bestScore); chipDark = (d.color === 'w' ? 1 : -1) * d.bestScore < 0;
@@ -658,6 +668,12 @@
         const col = mine ? ARROW.threat : ARROW.next;
         arrows.push({ from: ex.reply.from, to: ex.reply.to, color: col });
         if (tints[ex.reply.to] == null) tints[ex.reply.to] = col + '80';
+      }
+      if (r.showArrows && ex && ex.forks) {
+        for (const fk of ex.forks) {
+          if (fk.role === 'played') forkMarks(fk, arrows, tints);
+          else if (fk.role === 'reply' && BAD.includes(d.cls)) forkMarks(fk, arrows, tints);
+        }
       }
       boardOpts = { flip, last: m, arrows, tints, badge: { sq: m.to, color: k.color, icon: k.icon } };
       const lab = d.cls === 'best' ? 'is the best move' : d.cls === 'great' ? 'is a great move' : d.cls === 'book' ? 'is a book move' : `is ${/^[aeiou]/i.test(k.label) ? 'an' : 'a'} ${k.label.toLowerCase()}${['good', 'excellent'].includes(d.cls) ? ' move' : ''}`;
@@ -694,7 +710,7 @@
         <div class="coachav">${pieceSVG('N')}</div>
         <div class="bubble">
           <div class="bh">${icon}<b>${title}</b><span class="evchip ${chipDark ? 'dark' : ''}">${chip}</span></div>
-          <div class="bbody"><p>${body}</p>
+          <div class="bbody"><p>${forkTagFlag ? '<span class="forktag">Fork</span>' : ''}${body}</p>
           ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}</div>
         </div>
       </div>
