@@ -122,6 +122,7 @@
   const VIEWS = ['home', 'league', 'quick', 'leaderboard', 'history'];
   let curView = 'home';
   function nav(view, dir) {
+    if (view === 'league' && curView !== 'league') leagueView = null;
     curView = view;
     playEnter(dir ? (dir > 0 ? 'slide-l' : 'slide-r') : 'enter');
     R = null;
@@ -206,29 +207,54 @@
   }
 
   // ---------- league ----------
+  let leagueView = null; // which league's tab is open (defaults to the player's)
+  const moveTag = m => m > 0 ? `<span class="mvt up" title="Up ${m}">▲${m}</span>` : m < 0 ? `<span class="mvt down" title="Down ${-m}">▼${-m}</span>` : '<span class="mvt same">–</span>';
+  const who = id => id === 'me' ? '🙂 <b>You</b>' : `${League.botById(id).avatar} ${esc(League.botById(id).name)}`;
+  const score = sc => sc === 1 ? '1 – 0' : sc === 0 ? '0 – 1' : '½ – ½';
   function league() {
     S = League.state();
-    const st = League.standings(), s = S.season, fx = League.nextFixture();
-    const last = s.results[s.results.length - 1];
-    const nm = id => id === 'me' ? '<b>You</b>' : esc(League.botById(id).name);
+    const mine = S.leagueIdx;
+    if (leagueView == null || leagueView < 0 || leagueView >= LEAGUES.length) leagueView = mine;
+    const li = leagueView, s = League.season(li), st = League.standings(li), L = LEAGUES[li];
+    const isMine = li === mine, fx = isMine ? League.nextFixture() : null, total = s.rounds.length;
+    const zone = i => (i < 2 && li < LEAGUES.length - 1) || (i === 0 && li === LEAGUES.length - 1) ? 'up' : i >= st.length - 2 && li > 0 ? 'down' : '';
+    // rounds: played ones show results, the next one shows fixtures, later ones are muted
+    const rounds = s.rounds.map((pairs, r) => {
+      const res = s.results[r], state = res ? 'done' : r === s.round ? 'next' : 'later';
+      const games = (res || pairs.map(([a, b]) => ({ a, b }))).filter(g => !g.bye && g.a !== 'bye' && g.b !== 'bye').map(g =>
+        `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}</span></div>`).join('');
+      return `<details class="rnd ${state}" ${state === 'next' || (state === 'done' && r === s.round - 1 && s.round === total) || (r === s.round - 1 && !s.results[s.round]) ? 'open' : ''}>
+        <summary><b>Round ${r + 1}</b><span class="muted">${state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
+    }).join('');
+    const hist = League.history(li).slice().reverse();
     app.innerHTML = `
+      <div class="ltabs">${LEAGUES.map((x, i) => `<button class="ltab ${i === li ? 'on' : ''}" data-li="${i}" style="--c:${x.color}">${x.icon} ${x.name}${i === mine ? '<i title="Your league"></i>' : ''}</button>`).join('')}</div>
       <section class="card">
-        <div class="row between"><h2>${leagueBadge(s.league)} Season ${s.num}</h2><span class="muted">Round ${Math.min(s.round + 1, 5)} / 5</span></div>
-        <table class="tbl"><thead><tr><th>#</th><th>Player</th><th>Rating</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody>
-        ${st.map((r, i) => {
-          const b = r.id === 'me' ? null : League.botById(r.id);
-          const zone = i < 2 && s.league < LEAGUES.length - 1 ? 'up' : i >= 4 && s.league > 0 ? 'down' : (i === 0 ? 'up' : '');
-          return `<tr class="${r.id === 'me' ? 'me' : ''} ${zone}"><td>${i + 1}</td><td>${b ? b.avatar + ' ' + esc(b.name) : '🙂 You'}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td></tr>`;
-        }).join('')}</tbody></table>
-        <p class="legend"><span class="up">■</span> ${s.league === LEAGUES.length - 1 ? 'Champion' : 'Promotion'} <span class="down">■</span> Relegation</p>
-        ${fx ? `<button class="btn primary" id="playLeague">Play round ${s.round + 1} vs ${esc(League.botById(fx.botId).name)}</button>` : ''}
+        <div class="row between"><h2>${leagueBadge(li)} Season ${s.num}</h2><span class="muted">${isMine ? 'Your league · ' : ''}Round ${Math.min(s.round + 1, total)} / ${total}</span></div>
+        <div class="sprog">${s.rounds.map((_, r) => `<span class="${r < s.round ? 'done' : r === s.round ? 'cur' : ''}"></span>`).join('')}</div>
+        <table class="tbl ltable"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody>
+        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td></tr>`).join('')}
+        </tbody></table>
+        <p class="legend"><span class="up">■</span> ${li === LEAGUES.length - 1 ? 'Champion' : `Promotion to ${LEAGUES[li + 1].name}`} ${li > 0 ? `<span class="down">■</span> Relegation to ${LEAGUES[li - 1].name}` : ''} · ▲▼ change since last round</p>
+        ${fx ? `<button class="btn primary" id="playLeague">Play round ${s.round + 1} vs ${esc(League.botById(fx.botId).name)}</button>`
+          : !isMine ? `<button class="btn" id="toMine">Back to your league (${LEAGUES[mine].name})</button>` : ''}
       </section>
-      ${last ? `<section class="card"><h3>Last round results</h3>${last.map(r => `<div class="res">${nm(r.a)} <span>${r.sc === 1 ? '1 – 0' : r.sc === 0 ? '0 – 1' : '½ – ½'}</span> ${nm(r.b)}</div>`).join('')}</section>` : ''}
-      <section class="card"><h3>Season history & trophies</h3>
+      <section class="card"><h3>Matches</h3><div class="rounds">${rounds}</div>
+        <p class="muted small">Every league plays its next round when you play your league match.</p></section>
+      <section class="card"><h3>${L.icon} ${L.name} history</h3>
+        ${hist.length ? hist.map(h => `<div class="hseason"><div class="row between"><b>Season ${h.season}</b><span>🏆 ${who(h.champion)}</span></div>
+          ${h.promoted.length ? `<div class="hmove up">⬆ Promoted: ${h.promoted.map(who).join(', ')}</div>` : ''}
+          ${h.relegated.length ? `<div class="hmove down">⬇ Relegated: ${h.relegated.map(who).join(', ')}</div>` : ''}</div>`).join('')
+          : '<p class="muted">No finished seasons in this league yet.</p>'}
+      </section>
+      ${isMine ? `<section class="card"><h3>Your seasons & trophies</h3>
         ${S.seasonsLog.length ? S.seasonsLog.slice().reverse().map(l => `<div class="res">Season ${l.season} ${leagueBadge(l.league)} finished #${l.pos} (${l.pts} pts) — <b>${l.outcome}</b></div>`).join('') : '<p class="muted">No completed seasons yet.</p>'}
         <p>${S.trophies.map(t => `<span title="${LEAGUES[t.league].name} S${t.season}" class="trophy">${LEAGUES[t.league].icon}</span>`).join('') || ''}</p>
-      </section>`;
-    const b = $('#playLeague'); if (b) b.onclick = playLeague;
+      </section>` : ''}`;
+    app.querySelectorAll('.ltab').forEach(b => b.onclick = () => { leagueView = +b.dataset.li; league(); });
+    const on = app.querySelector('.ltab.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    const pb = $('#playLeague'); if (pb) pb.onclick = playLeague;
+    const tm = $('#toMine'); if (tm) tm.onclick = () => { leagueView = mine; league(); };
   }
   function playLeague() {
     const fx = League.nextFixture(), bot = League.botById(fx.botId);
@@ -248,7 +274,7 @@
       <div class="row"><label>Color</label><div class="seg" id="col"><button data-v="w" class="on">♔ White</button><button data-v="r">🎲 Random</button><button data-v="b">♚ Black</button></div>
       <label class="switch"><input type="checkbox" id="rated" role="switch" checked><span class="track"><span class="knob"></span></span><span class="swl">Rated</span></label></div>
       <div class="row tcrow"><label>Time</label>${tcPicker()}</div>
-      <div class="bots">${LEAGUES.map((L, li) => `<div class="botgrp"><h4 style="color:${L.color}">${L.icon} ${L.name}</h4>${BOTS.filter(b => b.league === li).map(b =>
+      <div class="bots">${LEAGUES.map((L, li) => `<div class="botgrp"><h4 style="color:${L.color}">${L.icon} ${L.name}</h4>${League.members(li).filter(id => id !== 'me').map(League.botById).map(b =>
         `<button class="bot ${b.id === sel ? 'on' : ''}" data-id="${b.id}"><span>${b.avatar}</span><b>${esc(b.name)}</b><small>${League.rating(b.id)}</small></button>`).join('')}</div>`).join('')}</div>
       <button class="btn primary big" id="start">Play</button></section>`;
     app.querySelectorAll('#col button').forEach(b => b.onclick = () => { color = b.dataset.v; app.querySelectorAll('#col button').forEach(x => x.classList.toggle('on', x === b)); });
@@ -261,8 +287,10 @@
   // ---------- leaderboard ----------
   function leaderboard() {
     const lb = League.leaderboard();
-    app.innerHTML = `<section class="card"><h2>Global leaderboard</h2><table class="tbl"><thead><tr><th>#</th><th>Player</th><th>League</th><th>Rating</th></tr></thead><tbody>
-      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td>${leagueBadge(r.league)}</td><td><b>${r.rating}</b></td></tr>`).join('')}
+    app.innerHTML = `<section class="card"><h2>Global leaderboard</h2>
+      <p class="muted small">▲▼ show how many places each player moved since your last game.</p>
+      <table class="tbl lbt"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th></tr></thead><tbody>
+      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td>${leagueBadge(r.league)}</td><td><b>${r.rating}</b></td></tr>`).join('')}
       </tbody></table></section>`;
   }
 
@@ -499,6 +527,7 @@
     if (g.tc.base) g.time[g.chess.turn] = remaining(g.chess.turn);
     const score = result === '1/2-1/2' ? 0.5 : (result === '1-0') === (g.color === 'w') ? 1 : 0;
     let delta = null, summary = null;
+    League.snapshotRanks();
     if (g.rated) { delta = League.ratePlayer(g.bot.id, score); }
     League.recordGame(score);
     if (g.mode === 'league') summary = League.completeRound(score);
@@ -847,7 +876,7 @@
 
   // ---------- swipe gestures (phones) ----------
   let sw = null;
-  const blocked = el => el.closest('.board, .evgraph, .moves, .ladder, .nav, .overlay, input, .switch');
+  const blocked = el => el.closest('.board, .evgraph, .moves, .ladder, .ltabs, .nav, .overlay, input, .switch');
   document.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) { sw = null; return; }
     const t = e.touches[0];

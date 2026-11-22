@@ -1,4 +1,8 @@
-// Bots, Elo ratings, leagues (seasons with promotion/relegation) and persistence.
+// Bots, Elo ratings, leagues and persistence.
+// All seven leagues run a season at the same time. When the player finishes a league
+// round, every league plays that round (bot-vs-bot games are simulated from ratings).
+// At the end of a season the top 2 of each league go up and the bottom 2 go down,
+// for bots as well as the player.
 (function (root) {
   const LEAGUES = [
     { name: 'Bronze', base: 400, color: '#c98a4b', icon: '🥉' },
@@ -9,41 +13,66 @@
     { name: 'Master', base: 1900, color: '#c07aff', icon: '👑' },
     { name: 'Grandmaster', base: 2200, color: '#ff6b6b', icon: '🏆' }
   ];
+  const TOP = LEAGUES.length - 1;
   const NAMES = [
     ['Pip', 'Rookie Ray', 'Tilly', 'Bumble', 'Dot'],
-    ['Milo', 'Sasha', 'Gus', 'Nova', 'Juniper'],
-    ['Ember', 'Orion', 'Talia', 'Bishop Bo', 'Quill'],
-    ['Vega', 'Rook Rana', 'Cyrus', 'Lyra', 'Knightly'],
-    ['Zephyr', 'Indigo', 'Atlas', 'Sable', 'Kestrel'],
-    ['Magnus Bot', 'Valkyrie', 'Oracle', 'Tempest', 'Cipher'],
-    ['Titan', 'Nemesis', 'Paragon', 'Sentinel', 'Omega']
+    // the higher leagues have 6 bots, so with the player every league has 6 players
+    ['Milo', 'Sasha', 'Gus', 'Nova', 'Juniper', 'Hazel'],
+    ['Ember', 'Orion', 'Talia', 'Bishop Bo', 'Quill', 'Rune'],
+    ['Vega', 'Rook Rana', 'Cyrus', 'Lyra', 'Knightly', 'Solstice'],
+    ['Zephyr', 'Indigo', 'Atlas', 'Sable', 'Kestrel', 'Aurora'],
+    ['Magnus Bot', 'Valkyrie', 'Oracle', 'Tempest', 'Cipher', 'Phantom'],
+    ['Titan', 'Nemesis', 'Paragon', 'Sentinel', 'Omega', 'Zenith']
   ];
-  const AVATARS = ['🐣','🐢','🦊','🐼','🐙','🦉','🐺','🦅','🐉','🤖'];
+  const AVATARS = ['🐣', '🐢', '🦊', '🐼', '🐙', '🦉', '🐺', '🦅', '🐉', '🤖'];
   const BOTS = [];
   LEAGUES.forEach((L, li) => NAMES[li].forEach((name, j) => BOTS.push({
-    id: `b${li}_${j}`, name, league: li, elo: L.base - 120 + j * 60, avatar: AVATARS[(li + j * 3) % AVATARS.length]
+    id: `b${li}_${j}`, name, league: li, elo: L.base - 150 + j * 60, avatar: AVATARS[(li + j * 3) % AVATARS.length]
   })));
   const botById = id => BOTS.find(b => b.id === id);
+  const ROUNDS = 5;
 
   const KEY = 'checkmate-arena-v1';
   let S;
   function fresh() {
     return { player: { name: 'You', rating: 500, peak: 500, games: 0, w: 0, d: 0, l: 0 },
-      leagueIdx: 0, season: null, trophies: [], history: [], seasonsLog: [],
+      leagueIdx: 0, trophies: [], history: [], seasonsLog: [],
       botRatings: Object.fromEntries(BOTS.map(b => [b.id, b.elo])) };
   }
+
+  // ---------- persistence & migration ----------
   function load() {
     try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
     for (const b of BOTS) if (S.botRatings[b.id] == null) S.botRatings[b.id] = b.elo;
-    if (!S.season) newSeason();
+    if (!S.members) migrate();
+    S.season = S.seasons[S.leagueIdx];
     return S;
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
-  function reset() { S = fresh(); newSeason(); save(); }
-  const rating = id => id === 'me' ? S.player.rating : S.botRatings[id];
+  // Older saves only had the player's league: build the others around it.
+  function migrate() {
+    S.members = {};
+    LEAGUES.forEach((L, li) => { S.members[li] = BOTS.filter(b => b.league === li).map(b => b.id); });
+    S.members[S.leagueIdx].unshift('me');
+    S.leagueHistory = {}; LEAGUES.forEach((L, li) => { S.leagueHistory[li] = []; });
+    const old = S.season;
+    S.seasonNum = old ? old.num : 1;
+    S.seasons = {};
+    LEAGUES.forEach((L, li) => {
+      if (li === S.leagueIdx && old) { S.seasons[li] = { ...old, ids: Object.keys(old.table), prevPos: null }; return; }
+      S.seasons[li] = makeSeason(li);
+      // catch up to the same round as the player's league
+      for (let r = 0; r < (old ? old.round : 0); r++) playRound(li, null);
+    });
+    save();
+  }
+  function save() {
+    try { const copy = { ...S }; delete copy.season; localStorage.setItem(KEY, JSON.stringify(copy)); } catch (e) {}
+  }
+  function reset() { S = fresh(); migrate(); S.season = S.seasons[S.leagueIdx]; save(); }
 
+  // ---------- ratings ----------
+  const rating = id => id === 'me' ? S.player.rating : S.botRatings[id];
   const expected = (a, b) => 1 / (1 + Math.pow(10, (b - a) / 400));
-  // score: 1 win, 0.5 draw, 0 loss (player perspective). Returns delta.
   function ratePlayer(botId, score) {
     const p = S.player, opp = rating(botId);
     const k = p.games < 20 ? 40 : 24;
@@ -58,33 +87,21 @@
     if (score === 1) p.w++; else if (score === 0) p.l++; else p.d++;
   }
 
-  // Round robin among 6 (player + 5 bots) via the circle method: 5 rounds x 3 games.
-  function newSeason() {
-    const li = S.leagueIdx;
-    const ids = ['me', ...BOTS.filter(b => b.league === li).map(b => b.id)];
-    const rounds = [];
-    let arr = ids.slice();
-    for (let r = 0; r < 5; r++) {
+  // ---------- seasons ----------
+  // Round robin by the circle method. Five players get a "bye" so everyone sits out once.
+  function makeSeason(li) {
+    const ids = S.members[li].slice();
+    const arr = ids.length % 2 ? ids.concat('bye') : ids.slice();
+    const n = arr.length, rounds = [];
+    let a = arr.slice();
+    for (let r = 0; r < n - 1; r++) {
       const pairs = [];
-      for (let i = 0; i < 3; i++) pairs.push(r % 2 ? [arr[5 - i], arr[i]] : [arr[i], arr[5 - i]]);
+      for (let i = 0; i < n / 2; i++) pairs.push(r % 2 ? [a[n - 1 - i], a[i]] : [a[i], a[n - 1 - i]]);
       rounds.push(pairs);
-      arr = [arr[0], arr[5], ...arr.slice(1, 5)];
+      a = [a[0], a[n - 1], ...a.slice(1, n - 1)];
     }
-    const table = Object.fromEntries(ids.map(id => [id, { p: 0, w: 0, d: 0, l: 0, pts: 0 }]));
-    S.season = { num: (S.seasonsLog.length + 1), league: li, rounds, round: 0, table, results: [], done: false };
-    save();
-  }
-  function nextFixture() {
-    const s = S.season; if (s.round >= 5) return null;
-    const pair = s.rounds[s.round].find(p => p.includes('me'));
-    return { botId: pair[0] === 'me' ? pair[1] : pair[0], color: pair[0] === 'me' ? 'w' : 'b' };
-  }
-  function applyResult(a, b, scoreA) {
-    const T = S.season.table;
-    T[a].p++; T[b].p++;
-    if (scoreA === 1) { T[a].w++; T[b].l++; T[a].pts += 1; }
-    else if (scoreA === 0) { T[b].w++; T[a].l++; T[b].pts += 1; }
-    else { T[a].d++; T[b].d++; T[a].pts += 0.5; T[b].pts += 0.5; }
+    return { num: S.seasonNum, league: li, ids, rounds: rounds.slice(0, ROUNDS), round: 0,
+      table: Object.fromEntries(ids.map(id => [id, { p: 0, w: 0, d: 0, l: 0, pts: 0 }])), results: [], prevPos: null };
   }
   function simulate(a, b) {
     const e = expected(S.botRatings[a], S.botRatings[b]);
@@ -94,44 +111,91 @@
     S.botRatings[a] += d; S.botRatings[b] -= d;
     return sc;
   }
-  // Player finished their league game; also simulate the round's other games.
-  function completeRound(playerScore) {
-    const s = S.season, rnd = s.rounds[s.round], out = [];
-    for (const [a, b] of rnd) {
+  function applyResult(T, a, b, scoreA) {
+    T[a].p++; T[b].p++;
+    if (scoreA === 1) { T[a].w++; T[b].l++; T[a].pts += 1; }
+    else if (scoreA === 0) { T[b].w++; T[a].l++; T[b].pts += 1; }
+    else { T[a].d++; T[b].d++; T[a].pts += 0.5; T[b].pts += 0.5; }
+  }
+  // Play the current round of league li. playerScore is used for the player's own game.
+  function playRound(li, playerScore) {
+    const s = S.seasons[li]; if (s.round >= s.rounds.length) return;
+    s.prevPos = Object.fromEntries(standings(li).map((r, i) => [r.id, i + 1]));
+    const out = [];
+    for (const [a, b] of s.rounds[s.round]) {
+      if (a === 'bye' || b === 'bye') { out.push({ a, b, bye: true }); continue; }
       let sc;
       if (a === 'me') sc = playerScore; else if (b === 'me') sc = 1 - playerScore; else sc = simulate(a, b);
-      applyResult(a, b, sc); out.push({ a, b, sc });
+      applyResult(s.table, a, b, sc); out.push({ a, b, sc });
     }
     s.results.push(out);
     s.round++;
+  }
+  function nextFixture() {
+    const s = S.season; if (s.round >= s.rounds.length) return null;
+    const pair = s.rounds[s.round].find(p => p.includes('me'));
+    if (!pair || pair.includes('bye')) return null;
+    return { botId: pair[0] === 'me' ? pair[1] : pair[0], color: pair[0] === 'me' ? 'w' : 'b' };
+  }
+  // The player finished their league game: every league plays this round.
+  function completeRound(playerScore) {
+    LEAGUES.forEach((L, li) => playRound(li, li === S.leagueIdx ? playerScore : null));
     let summary = null;
-    if (s.round >= 5) summary = endSeason();
+    if (S.season.round >= S.season.rounds.length) summary = endSeason();
     save();
     return summary;
   }
-  function standings() {
-    const T = S.season.table;
-    return Object.keys(T).map(id => ({ id, ...T[id] })).sort((x, y) => y.pts - x.pts || y.w - x.w || rating(y.id) - rating(x.id));
+  function standings(li = S.leagueIdx) {
+    const s = S.seasons[li], T = s.table;
+    const rows = Object.keys(T).map(id => ({ id, ...T[id] })).sort((x, y) => y.pts - x.pts || y.w - x.w || rating(y.id) - rating(x.id));
+    rows.forEach((r, i) => { r.move = s.prevPos && s.prevPos[r.id] ? s.prevPos[r.id] - (i + 1) : 0; });
+    return rows;
   }
   function endSeason() {
-    const st = standings(), pos = st.findIndex(r => r.id === 'me') + 1, li = S.leagueIdx;
-    let outcome = 'stay';
-    if (pos === 1 && li === LEAGUES.length - 1) { outcome = 'champion'; S.trophies.push({ league: li, season: S.season.num, date: Date.now() }); }
-    else if (pos <= 2 && li < LEAGUES.length - 1) { outcome = 'promoted'; if (pos === 1) S.trophies.push({ league: li, season: S.season.num, date: Date.now() }); S.leagueIdx++; }
-    else if (pos >= 5 && li > 0) { outcome = 'relegated'; S.leagueIdx--; }
-    else if (pos === 1) S.trophies.push({ league: li, season: S.season.num, date: Date.now() });
-    const summary = { season: S.season.num, league: li, pos, outcome, pts: st[pos - 1].pts, newLeague: S.leagueIdx };
+    const finals = LEAGUES.map((L, li) => standings(li));
+    const up = {}, down = {};
+    LEAGUES.forEach((L, li) => {
+      if (li < TOP) up[li] = finals[li].slice(0, 2).map(r => r.id);
+      if (li > 0) down[li] = finals[li].slice(-2).map(r => r.id);
+      S.leagueHistory[li].push({ season: S.seasonNum, champion: finals[li][0].id, promoted: up[li] || [], relegated: down[li] || [],
+        table: finals[li].map(r => ({ id: r.id, pts: r.pts, w: r.w, d: r.d, l: r.l })) });
+    });
+    // move everyone
+    const next = {};
+    LEAGUES.forEach((L, li) => {
+      next[li] = S.members[li].filter(id => !(up[li] || []).includes(id) && !(down[li] || []).includes(id))
+        .concat(down[li + 1] || [], up[li - 1] || []);
+    });
+    S.members = next;
+    // the player's result
+    const li = S.leagueIdx, pos = finals[li].findIndex(r => r.id === 'me') + 1;
+    const newLi = +Object.keys(next).find(k => next[k].includes('me'));
+    let outcome = newLi > li ? 'promoted' : newLi < li ? 'relegated' : 'stay';
+    if (pos === 1 && li === TOP) outcome = 'champion';
+    if (pos === 1) S.trophies.push({ league: li, season: S.seasonNum, date: Date.now() });
+    const summary = { season: S.seasonNum, league: li, pos, outcome, pts: finals[li][pos - 1].pts, newLeague: newLi };
     S.seasonsLog.push(summary);
-    newSeason();
+    S.leagueIdx = newLi;
+    S.seasonNum++;
+    LEAGUES.forEach((L, i) => { S.seasons[i] = makeSeason(i); });
+    S.season = S.seasons[S.leagueIdx];
     return summary;
   }
+
+  // ---------- leaderboard ----------
+  const botLeague = id => +Object.keys(S.members).find(k => S.members[k].includes(id));
   function leaderboard() {
-    const rows = BOTS.map(b => ({ id: b.id, name: b.name, avatar: b.avatar, rating: S.botRatings[b.id], league: b.league }));
+    const rows = BOTS.map(b => ({ id: b.id, name: b.name, avatar: b.avatar, rating: S.botRatings[b.id], league: botLeague(b.id) }));
     rows.push({ id: 'me', name: S.player.name, avatar: '🙂', rating: S.player.rating, league: S.leagueIdx });
-    return rows.sort((a, b) => b.rating - a.rating);
+    rows.sort((a, b) => b.rating - a.rating || (a.id === 'me' ? -1 : 1));
+    rows.forEach((r, i) => { r.move = S.lbPrev && S.lbPrev[r.id] ? S.lbPrev[r.id] - (i + 1) : 0; });
+    return rows;
   }
+  // Remember everyone's leaderboard position just before ratings change, so arrows show who moved.
+  function snapshotRanks() { const lb = leaderboard(); S.lbPrev = Object.fromEntries(lb.map((r, i) => [r.id, i + 1])); }
   function addHistory(g) { S.history.unshift(g); S.history = S.history.slice(0, 40); save(); }
 
   root.League = { LEAGUES, BOTS, botById, load, save, reset, state: () => S, rating, ratePlayer, recordGame,
-    nextFixture, completeRound, standings, leaderboard, addHistory, expected };
+    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague,
+    season: li => S.seasons[li], members: li => S.members[li], history: li => S.leagueHistory[li] || [] };
 })(typeof window !== 'undefined' ? window : globalThis);
