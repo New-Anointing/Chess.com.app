@@ -158,8 +158,12 @@
       if (li < TOP) up[li] = finals[li].slice(0, 2).map(r => r.id);
       if (li > 0) down[li] = finals[li].slice(-2).map(r => r.id);
       S.leagueHistory[li].push({ season: S.seasonNum, champion: finals[li][0].id, promoted: up[li] || [], relegated: down[li] || [],
-        table: finals[li].map(r => ({ id: r.id, pts: r.pts, w: r.w, d: r.d, l: r.l })) });
+        table: finals[li].map(r => ({ id: r.id, p: r.p, pts: r.pts, w: r.w, d: r.d, l: r.l, rating: rating(r.id) })),
+        results: S.seasons[li].results });
     });
+    // freeze the leaderboard as it stood at the end of this season
+    S.lbSeasons = S.lbSeasons || {};
+    S.lbSeasons[S.seasonNum] = leaderboard().map(r => ({ id: r.id, rating: r.rating, league: r.league }));
     // move everyone
     const next = {};
     LEAGUES.forEach((L, li) => {
@@ -222,6 +226,20 @@
       if (!g.bye && (g.a === id || g.b === id)) out.push(ch(g.a === id ? g.sc : 1 - g.sc));
     return out.slice(-n);
   }
+  // A player's results in a finished season (from the league histories).
+  function seasonForm(id, season) {
+    for (const li in S.leagueHistory) {
+      const h = S.leagueHistory[li].find(x => x.season === season);
+      if (!h || !h.results || !h.table.some(r => r.id === id)) continue;
+      const out = [];
+      for (const round of h.results) for (const g of round)
+        if (!g.bye && (g.a === id || g.b === id)) { const sc = g.a === id ? g.sc : 1 - g.sc; out.push(sc === 1 ? 'W' : sc === 0 ? 'L' : 'D'); }
+      return out;
+    }
+    return [];
+  }
+  const pastSeasons = () => Object.keys(S.lbSeasons || {}).map(Number).sort((a, b) => b - a);
+  const seasonBoard = n => (S.lbSeasons || {})[n];
   // Win / draw / loss chances for a vs b, from ratings adjusted by recent form.
   function predict(a, b, bonus = 0, rA, rB) {
     const fa = form(a), fb = form(b);
@@ -237,6 +255,6 @@
   function addHistory(g) { S.history.unshift(g); S.history = S.history.slice(0, 40); save(); }
 
   root.League = { LEAGUES, BOTS, botById, load, save, reset, state: () => S, rating, ratePlayer, recordGame,
-    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague, predict, form, recent,
+    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague, predict, form, recent, seasonForm, pastSeasons, seasonBoard,
     season: li => S.seasons[li], members: li => S.members[li], history: li => S.leagueHistory[li] || [] };
 })(typeof window !== 'undefined' ? window : globalThis);

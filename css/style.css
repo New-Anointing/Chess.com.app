@@ -365,3 +365,7 @@ main#app { overflow-x:clip; }
 
 .tbl:not(.full) .fcol{display:none}
 .tblseg{margin:6px 0 10px;display:inline-flex}
+.spick{display:flex;gap:6px;overflow-x:auto;align-items:center;padding:2px 0 8px;scrollbar-width:none}
+.spick::-webkit-scrollbar{display:none}
+.schip{flex:none;border:1px solid var(--line,rgba(255,255,255,.15));background:transparent;color:inherit;border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
+.schip.on{background:var(--accent);border-color:var(--accent);color:#06121a;font-weight:600}

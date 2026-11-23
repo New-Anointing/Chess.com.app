@@ -122,7 +122,7 @@
   const VIEWS = ['home', 'league', 'quick', 'leaderboard', 'history'];
   let curView = 'home';
   function nav(view, dir) {
-    if (view === 'league' && curView !== 'league') leagueView = null;
+    if (view === 'league' && curView !== 'league') { leagueView = null; seasonView = null; }
     curView = view;
     playEnter(dir ? (dir > 0 ? 'slide-l' : 'slide-r') : 'enter');
     R = null;
@@ -228,6 +228,8 @@
       const y = window.scrollY; rerender(); window.scrollTo(0, y);
     });
   }
+  let seasonView = null, lbView = 'all'; // null / 'all' = live; a number = a finished season
+  const frmHTML = arr => `<span class="frm">${arr.slice(-5).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span>`;
   let leagueView = null; // which league's tab is open (defaults to the player's)
   const moveTag = m => m > 0 ? `<span class="mvt up" title="Up ${m}">▲${m}</span>` : m < 0 ? `<span class="mvt down" title="Down ${-m}">▼${-m}</span>` : '<span class="mvt same">–</span>';
   const who = id => id === 'me' ? '🙂 <b>You</b>' : `${League.botById(id).avatar} ${esc(League.botById(id).name)}`;
@@ -236,8 +238,21 @@
     S = League.state();
     const mine = S.leagueIdx;
     if (leagueView == null || leagueView < 0 || leagueView >= LEAGUES.length) leagueView = mine;
-    const li = leagueView, s = League.season(li), st = League.standings(li), L = LEAGUES[li];
-    const isMine = li === mine, fx = isMine ? League.nextFixture() : null, total = s.rounds.length;
+    const li = leagueView, L = LEAGUES[li];
+    const allH = League.history(li);
+    const past = seasonView != null ? allH.find(h => h.season === seasonView) : null;
+    if (seasonView != null && !past) seasonView = null;
+    let s, st;
+    if (past) {
+      // a finished season: rebuild a read-only season from the saved history
+      const res = past.results || [];
+      s = { num: past.season, rounds: res.map(r => r.map(g => [g.a, g.b])), results: res, round: res.length };
+      st = past.table.map(r => ({ ...r, move: 0 }));
+    } else { s = League.season(li); st = League.standings(li); }
+    const isMine = li === mine && !past, fx = isMine ? League.nextFixture() : null, total = s.rounds.length;
+    const seasonPicker = allH.length ? `<div class="spick"><span class="muted small">Season</span>
+      <button class="schip ${past ? '' : 'on'}" data-s="cur">Current (S${League.season(li).num})</button>
+      ${allH.slice().reverse().map(h => `<button class="schip ${past && past.season === h.season ? 'on' : ''}" data-s="${h.season}">S${h.season}</button>`).join('')}</div>` : '';
     const zone = i => (i < 2 && li < LEAGUES.length - 1) || (i === 0 && li === LEAGUES.length - 1) ? 'up' : i >= st.length - 2 && li > 0 ? 'down' : '';
     // rounds: played ones show results, the next one shows fixtures, later ones are muted
     const rounds = s.rounds.map((pairs, r) => {
@@ -245,7 +260,7 @@
       const games = (res || pairs.map(([a, b]) => ({ a, b }))).filter(g => !g.bye && g.a !== 'bye' && g.b !== 'bye').map(g =>
         `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}</span></div>${res ? '' : predBar(g.a, g.b)}`).join('');
       return `<details class="rnd ${state}" ${state === 'next' || (state === 'done' && r === s.round - 1 && s.round === total) || (r === s.round - 1 && !s.results[s.round]) ? 'open' : ''}>
-        <summary><b>Round ${r + 1}</b><span class="muted">${state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
+        <summary><b>Round ${r + 1}</b><span class="muted">${past ? '' : state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
     }).join('');
     const lastFive = id => {
       const out = [];
@@ -253,22 +268,23 @@
         if (g.bye || (g.a !== id && g.b !== id)) continue;
         const sc = g.a === id ? g.sc : 1 - g.sc; out.push(sc === 1 ? 'W' : sc === 0 ? 'L' : 'D');
       }
-      return `<span class="frm">${out.slice(-5).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span>`;
+      return frmHTML(out);
     };
     const hist = League.history(li).slice().reverse();
     app.innerHTML = `
       <div class="ltabs">${LEAGUES.map((x, i) => `<button class="ltab ${i === li ? 'on' : ''}" data-li="${i}" style="--c:${x.color}">${x.icon} ${x.name}${i === mine ? '<i title="Your league"></i>' : ''}</button>`).join('')}</div>
       <section class="card">
-        <div class="row between"><h2>${leagueBadge(li)} Season ${s.num}</h2><span class="muted">${isMine ? 'Your league · ' : ''}Round ${Math.min(s.round + 1, total)} / ${total}</span></div>
+        ${seasonPicker}
+        <div class="row between"><h2>${leagueBadge(li)} Season ${s.num}</h2><span class="muted">${past ? `Final table · 🏆 ${who(past.champion)}` : `${isMine ? 'Your league · ' : ''}Round ${Math.min(s.round + 1, total)} / ${total}`}</span></div>
         <div class="sprog">${s.rounds.map((_, r) => `<span class="${r < s.round ? 'done' : r === s.round ? 'cur' : ''}"></span>`).join('')}</div>
         ${tblToggle()}<table class="tbl ltable ${tblFull ? 'full' : ''}"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th class="fcol">Form</th></tr></thead><tbody>
-        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td><td class="fcol">${lastFive(r.id)}</td></tr>`).join('')}
+        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${past ? (r.rating ?? '–') : League.rating(r.id)}</td><td>${r.p ?? r.w + r.d + r.l}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td><td class="fcol">${lastFive(r.id)}</td></tr>`).join('')}
         </tbody></table>
         <p class="legend"><span class="up">■</span> ${li === LEAGUES.length - 1 ? 'Champion' : `Promotion to ${LEAGUES[li + 1].name}`} ${li > 0 ? `<span class="down">■</span> Relegation to ${LEAGUES[li - 1].name}` : ''} · ▲▼ change since last round</p>
         ${fx ? `<button class="btn primary" id="playLeague">Play round ${s.round + 1} vs ${esc(League.botById(fx.botId).name)}</button>`
-          : !isMine ? `<button class="btn" id="toMine">Back to your league (${LEAGUES[mine].name})</button>` : ''}
+          : past ? `<button class="btn" id="toCur">Back to the current season</button>` : !isMine ? `<button class="btn" id="toMine">Back to your league (${LEAGUES[mine].name})</button>` : ''}
       </section>
-      <section class="card"><h3>Matches</h3><div class="rounds">${rounds}</div>
+      <section class="card"><h3>${past ? `Season ${s.num} matches` : 'Matches'}</h3><div class="rounds">${rounds || '<p class="muted">Matches from this season weren\'t recorded (it was played before match history was added).</p>'}</div>
         <p class="muted small">Every league plays its next round when you play your league match.</p></section>
       <section class="card"><h3>${L.icon} ${L.name} history</h3>
         ${hist.length ? hist.map(h => `<div class="hseason"><div class="row between"><b>Season ${h.season}</b><span>🏆 ${who(h.champion)}</span></div>
@@ -284,6 +300,8 @@
     const on = app.querySelector('.ltab.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
     const pb = $('#playLeague'); if (pb) pb.onclick = playLeague;
     bindTblToggle(league);
+    app.querySelectorAll('.schip').forEach(b => b.onclick = () => { seasonView = b.dataset.s === 'cur' ? null : +b.dataset.s; league(); });
+    const tc = $('#toCur'); if (tc) tc.onclick = () => { seasonView = null; league(); };
     const tm = $('#toMine'); if (tm) tm.onclick = () => { leagueView = mine; league(); };
   }
   function playLeague() {
@@ -317,13 +335,31 @@
 
   // ---------- leaderboard ----------
   function leaderboard() {
-    const lb = League.leaderboard();
-    app.innerHTML = `<section class="card"><h2>Global leaderboard</h2>
-      <p class="muted small">▲▼ show how many places each player moved since your last game. Form shows the last 5 results.</p>
+    S = League.state();
+    const seasons = League.pastSeasons();
+    if (lbView !== 'all' && !seasons.includes(lbView)) lbView = 'all';
+    let rows, note;
+    if (lbView === 'all') {
+      rows = League.leaderboard().map(r => ({ ...r, form: League.recent(r.id) }));
+      note = 'Live ranking by Elo rating: every rated game counts, league or quick match. ▲▼ show places moved since your last game.';
+    } else {
+      const prev = League.seasonBoard(lbView - 1), prevPos = prev ? Object.fromEntries(prev.map((r, i) => [r.id, i + 1])) : null;
+      rows = League.seasonBoard(lbView).map((r, i) => {
+        const b = r.id === 'me' ? null : League.botById(r.id);
+        return { ...r, name: b ? b.name : 'You', avatar: b ? b.avatar : '🙂', move: prevPos && prevPos[r.id] ? prevPos[r.id] - (i + 1) : 0, form: League.seasonForm(r.id, lbView) };
+      });
+      note = `Final ratings at the end of season ${lbView}. ▲▼ compare with the end of season ${lbView - 1}.`;
+    }
+    const tabs = `<div class="spick"><button class="schip ${lbView === 'all' ? 'on' : ''}" data-s="all">📊 Overall</button>
+      ${seasons.map(n => `<button class="schip ${lbView === n ? 'on' : ''}" data-s="${n}">Season ${n}</button>`).join('')}</div>`;
+    app.innerHTML = `<section class="card"><h2>${lbView === 'all' ? 'Global leaderboard' : `Season ${lbView} leaderboard`}</h2>
+      ${tabs}
+      <p class="muted small">${note}${seasons.length ? '' : ' Finished seasons will appear here as tabs.'}</p>
       ${tblToggle()}<table class="tbl lbt ${tblFull ? 'full' : ''}"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th><th class="fcol">Form</th></tr></thead><tbody>
-      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td><span class="badge lbb" style="--c:${LEAGUES[r.league].color}" title="${LEAGUES[r.league].name}">${LEAGUES[r.league].icon}<span class="lbn"> ${LEAGUES[r.league].name}</span></span></td><td><b>${r.rating}</b></td><td class="fcol"><span class="frm">${League.recent(r.id).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span></td></tr>`).join('')}
+      ${rows.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td><span class="badge lbb" style="--c:${LEAGUES[r.league].color}" title="${LEAGUES[r.league].name}">${LEAGUES[r.league].icon}<span class="lbn"> ${LEAGUES[r.league].name}</span></span></td><td><b>${r.rating}</b></td><td class="fcol">${frmHTML(r.form)}</td></tr>`).join('')}
       </tbody></table></section>`;
     bindTblToggle(leaderboard);
+    app.querySelectorAll('.schip').forEach(b => b.onclick = () => { lbView = b.dataset.s === 'all' ? 'all' : +b.dataset.s; leaderboard(); });
   }
 
   // ---------- history ----------
@@ -924,7 +960,7 @@
 
   // ---------- swipe gestures (phones) ----------
   let sw = null;
-  const blocked = el => el.closest('.board, .evgraph, .moves, .ladder, .ltabs, .nav, .overlay, input, .switch');
+  const blocked = el => el.closest('.board, .evgraph, .moves, .ladder, .ltabs, .spick, .nav, .overlay, input, .switch');
   document.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) { sw = null; return; }
     const t = e.touches[0];
