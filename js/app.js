@@ -220,6 +220,14 @@
   }
 
   // ---------- league ----------
+  let tblFull = false; try { tblFull = localStorage.getItem('ca-tbl') === 'full'; } catch (e) {}
+  const tblToggle = () => `<div class="seg tblseg"><button data-t="sum" class="${tblFull ? '' : 'on'}">Summary</button><button data-t="full" class="${tblFull ? 'on' : ''}">Full table</button></div>`;
+  function bindTblToggle(rerender) {
+    app.querySelectorAll('.tblseg button').forEach(b => b.onclick = () => {
+      tblFull = b.dataset.t === 'full'; try { localStorage.setItem('ca-tbl', tblFull ? 'full' : 'sum'); } catch (e) {}
+      const y = window.scrollY; rerender(); window.scrollTo(0, y);
+    });
+  }
   let leagueView = null; // which league's tab is open (defaults to the player's)
   const moveTag = m => m > 0 ? `<span class="mvt up" title="Up ${m}">▲${m}</span>` : m < 0 ? `<span class="mvt down" title="Down ${-m}">▼${-m}</span>` : '<span class="mvt same">–</span>';
   const who = id => id === 'me' ? '🙂 <b>You</b>' : `${League.botById(id).avatar} ${esc(League.botById(id).name)}`;
@@ -253,8 +261,8 @@
       <section class="card">
         <div class="row between"><h2>${leagueBadge(li)} Season ${s.num}</h2><span class="muted">${isMine ? 'Your league · ' : ''}Round ${Math.min(s.round + 1, total)} / ${total}</span></div>
         <div class="sprog">${s.rounds.map((_, r) => `<span class="${r < s.round ? 'done' : r === s.round ? 'cur' : ''}"></span>`).join('')}</div>
-        <table class="tbl ltable"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>Form</th></tr></thead><tbody>
-        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td><td>${lastFive(r.id)}</td></tr>`).join('')}
+        ${tblToggle()}<table class="tbl ltable ${tblFull ? 'full' : ''}"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th class="fcol">Form</th></tr></thead><tbody>
+        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td><td class="fcol">${lastFive(r.id)}</td></tr>`).join('')}
         </tbody></table>
         <p class="legend"><span class="up">■</span> ${li === LEAGUES.length - 1 ? 'Champion' : `Promotion to ${LEAGUES[li + 1].name}`} ${li > 0 ? `<span class="down">■</span> Relegation to ${LEAGUES[li - 1].name}` : ''} · ▲▼ change since last round</p>
         ${fx ? `<button class="btn primary" id="playLeague">Play round ${s.round + 1} vs ${esc(League.botById(fx.botId).name)}</button>`
@@ -275,6 +283,7 @@
     app.querySelectorAll('.ltab').forEach(b => b.onclick = () => { leagueView = +b.dataset.li; league(); });
     const on = app.querySelector('.ltab.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
     const pb = $('#playLeague'); if (pb) pb.onclick = playLeague;
+    bindTblToggle(league);
     const tm = $('#toMine'); if (tm) tm.onclick = () => { leagueView = mine; league(); };
   }
   function playLeague() {
@@ -311,9 +320,10 @@
     const lb = League.leaderboard();
     app.innerHTML = `<section class="card"><h2>Global leaderboard</h2>
       <p class="muted small">▲▼ show how many places each player moved since your last game. Form shows the last 5 results.</p>
-      <table class="tbl lbt"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th><th>Form</th></tr></thead><tbody>
-      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td><span class="badge lbb" style="--c:${LEAGUES[r.league].color}" title="${LEAGUES[r.league].name}">${LEAGUES[r.league].icon}<span class="lbn"> ${LEAGUES[r.league].name}</span></span></td><td><b>${r.rating}</b></td><td><span class="frm">${League.recent(r.id).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span></td></tr>`).join('')}
+      ${tblToggle()}<table class="tbl lbt ${tblFull ? 'full' : ''}"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th><th class="fcol">Form</th></tr></thead><tbody>
+      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td><span class="badge lbb" style="--c:${LEAGUES[r.league].color}" title="${LEAGUES[r.league].name}">${LEAGUES[r.league].icon}<span class="lbn"> ${LEAGUES[r.league].name}</span></span></td><td><b>${r.rating}</b></td><td class="fcol"><span class="frm">${League.recent(r.id).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span></td></tr>`).join('')}
       </tbody></table></section>`;
+    bindTblToggle(leaderboard);
   }
 
   // ---------- history ----------
