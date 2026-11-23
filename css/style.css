@@ -343,3 +343,16 @@ main#app { overflow-x:clip; }
 .fx.mine { background:color-mix(in srgb, var(--accent) 12%, transparent); }
 .hseason { padding:10px 0; border-top:1px solid #ffffff10; } .hmove { font-size:13px; margin-top:4px; } .hmove.up { color:#4cc38a; } .hmove.down { color:#ff8a8a; }
 @media (max-width: 820px) { .ltable th:nth-child(4), .ltable td:nth-child(4) { display:none; } .tbl th, .tbl td { padding:7px 5px; } .fx { font-size:13px; } }
+/* win predictions */
+.pred{margin:6px 0 10px;font-size:12px}
+.pred.full{background:var(--panel2,rgba(255,255,255,.04));border-radius:10px;padding:10px 12px;margin:10px 0}
+.pred .ptitle{font-size:13px;margin-bottom:6px}
+.wpbar{display:flex;height:8px;border-radius:5px;overflow:hidden;background:rgba(127,127,127,.2)}
+.wpbar span{display:block;height:100%;transition:width .4s}
+.wpbar .pw{background:#81b64c}.wpbar .pd{background:#8a8f98}.wpbar .pl{background:#e0503c}
+.plab,.pform{display:flex;justify-content:space-between;margin-top:4px;opacity:.85;gap:6px}
+.plab span:nth-child(2){opacity:.7}
+.pform .up{color:#81b64c}.pform .down{color:#7aa7ff}
+.rnd .pred{margin:-2px 8px 8px}
+.pred .wpbar{gap:0!important;padding:0!important;height:8px!important}
+.pred .wpbar span{margin:0!important;padding:0!important;height:8px!important;border-radius:0!important;flex:none}

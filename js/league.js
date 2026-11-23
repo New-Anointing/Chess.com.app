@@ -193,9 +193,41 @@
   }
   // Remember everyone's leaderboard position just before ratings change, so arrows show who moved.
   function snapshotRanks() { const lb = leaderboard(); S.lbPrev = Object.fromEntries(lb.map((r, i) => [r.id, i + 1])); }
+  // ---------- predictions ----------
+  // Recent form, in rating points: how much better/worse than expected a player has scored lately.
+  function form(id) {
+    let sum = 0, n = 0;
+    if (id === 'me') {
+      for (const h of S.history.slice(0, 8)) {
+        if (h.oppRating == null) continue;
+        sum += h.score - expected(h.myRating || S.player.rating, h.oppRating); n++;
+      }
+    } else {
+      for (const li in S.seasons) for (const round of S.seasons[li].results.slice(-8)) for (const g of round) {
+        if (g.bye || (g.a !== id && g.b !== id)) continue;
+        const opp = g.a === id ? g.b : g.a, sc = g.a === id ? g.sc : 1 - g.sc;
+        sum += sc - expected(rating(id), rating(opp)); n++;
+      }
+    }
+    if (!n) return 0;
+    // shrink small samples toward zero, cap at ±120 points
+    return Math.max(-120, Math.min(120, Math.round(sum / (n + 2) * 400)));
+  }
+  // Win / draw / loss chances for a vs b, from ratings adjusted by recent form.
+  function predict(a, b) {
+    const fa = form(a), fb = form(b);
+    const e = expected(rating(a) + fa, rating(b) + fb);
+    const draw = 0.24 * (1 - Math.min(1, Math.abs(e - 0.5) * 1.8)) + 0.03;
+    let win = Math.max(0.01, e - draw / 2), loss = Math.max(0.01, 1 - e - draw / 2);
+    const t = win + draw + loss; win /= t; loss /= t;
+    const pct = x => Math.round(x * 100);
+    const W = pct(win), L = pct(loss);
+    return { win: W, draw: 100 - W - L, loss: L, formA: fa, formB: fb };
+  }
+
   function addHistory(g) { S.history.unshift(g); S.history = S.history.slice(0, 40); save(); }
 
   root.League = { LEAGUES, BOTS, botById, load, save, reset, state: () => S, rating, ratePlayer, recordGame,
-    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague,
+    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague, predict, form,
     season: li => S.seasons[li], members: li => S.members[li], history: li => S.leagueHistory[li] || [] };
 })(typeof window !== 'undefined' ? window : globalThis);

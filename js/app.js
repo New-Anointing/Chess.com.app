@@ -139,6 +139,19 @@
 
   const leagueBadge = li => `<span class="badge" style="--c:${LEAGUES[li].color}">${LEAGUES[li].icon} ${LEAGUES[li].name}</span>`;
 
+  // Prediction bar: chance for a (left) vs b (right).
+  const formTxt = f => f > 15 ? '<span class="up">🔥 in form</span>' : f < -15 ? '<span class="down">❄ out of form</span>' : '';
+  function predBar(a, b, full) {
+    const p = League.predict(a, b), nm = id => id === 'me' ? 'You' : esc(League.botById(id).name);
+    const fav = p.win >= p.loss ? [nm(a), p.win] : [nm(b), p.loss];
+    return `<div class="pred ${full ? 'full' : ''}">
+      ${full ? `<div class="ptitle">Prediction: <b>${fav[0]}</b> ${fav[0] === 'You' ? 'have' : 'has'} a ${fav[1]}% chance to win</div>` : ''}
+      <div class="wpbar"><span class="pw" style="width:${p.win}%"></span><span class="pd" style="width:${p.draw}%"></span><span class="pl" style="width:${p.loss}%"></span></div>
+      <div class="plab"><span>${nm(a)} ${p.win}%</span><span>Draw ${p.draw}%</span><span>${nm(b)} ${p.loss}%</span></div>
+      ${full && (formTxt(p.formA) || formTxt(p.formB)) ? `<div class="pform"><span>${formTxt(p.formA)}</span><span>${formTxt(p.formB)}</span></div>` : ''}
+    </div>`;
+  }
+
   // ---------- home ----------
   function home() {
     S = League.state();
@@ -161,7 +174,7 @@
         <section class="card">
           <h2>League</h2>
           <p>${leagueBadge(S.leagueIdx)} Season ${S.season.num} · Round ${S.season.round + 1} of 5</p>
-          ${bot ? `<p>Next: ${bot.avatar} <b>${esc(bot.name)}</b> (${League.rating(bot.id)}) · you play ${fx.color === 'w' ? 'White' : 'Black'}</p>` : ''}
+          ${bot ? `<p>Next: ${bot.avatar} <b>${esc(bot.name)}</b> (${League.rating(bot.id)}) · you play ${fx.color === 'w' ? 'White' : 'Black'}</p>${predBar('me', bot.id, true)}` : ''}
           <div class="row"><button class="btn primary" id="playLeague">Play league match</button><button class="btn" id="seeLeague">Standings</button></div>
         </section>
         <section class="card">
@@ -222,7 +235,7 @@
     const rounds = s.rounds.map((pairs, r) => {
       const res = s.results[r], state = res ? 'done' : r === s.round ? 'next' : 'later';
       const games = (res || pairs.map(([a, b]) => ({ a, b }))).filter(g => !g.bye && g.a !== 'bye' && g.b !== 'bye').map(g =>
-        `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}</span></div>`).join('');
+        `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}</span></div>${res ? '' : predBar(g.a, g.b)}`).join('');
       return `<details class="rnd ${state}" ${state === 'next' || (state === 'done' && r === s.round - 1 && s.round === total) || (r === s.round - 1 && !s.results[s.round]) ? 'open' : ''}>
         <summary><b>Round ${r + 1}</b><span class="muted">${state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
     }).join('');
@@ -260,7 +273,7 @@
     const fx = League.nextFixture(), bot = League.botById(fx.botId);
     modal(`<div class="vs"><span>🙂</span><b>VS</b><span>${bot.avatar}</span></div>
       <h2>Round ${S.season.round + 1}: ${esc(bot.name)} <small class="muted">(${League.rating(bot.id)})</small></h2>
-      <p class="muted">You play ${fx.color === 'w' ? '♔ White' : '♚ Black'}</p>
+      <p class="muted">You play ${fx.color === 'w' ? '♔ White' : '♚ Black'}</p>${predBar('me', bot.id, true)}
       <h4>Time control</h4>${tcPicker()}
       <div class="row"><button class="btn primary" data-a="go">Start match</button><button class="btn" data-a="x">Cancel</button></div>`,
       a => a === 'go' && startGame({ bot, color: fx.color, mode: 'league', rated: true, tc: tcId }));
@@ -276,9 +289,10 @@
       <div class="row tcrow"><label>Time</label>${tcPicker()}</div>
       <div class="bots">${LEAGUES.map((L, li) => `<div class="botgrp"><h4 style="color:${L.color}">${L.icon} ${L.name}</h4>${League.members(li).filter(id => id !== 'me').map(League.botById).map(b =>
         `<button class="bot ${b.id === sel ? 'on' : ''}" data-id="${b.id}"><span>${b.avatar}</span><b>${esc(b.name)}</b><small>${League.rating(b.id)}</small></button>`).join('')}</div>`).join('')}</div>
+      <div id="qpred">${predBar('me', sel, true)}</div>
       <button class="btn primary big" id="start">Play</button></section>`;
     app.querySelectorAll('#col button').forEach(b => b.onclick = () => { color = b.dataset.v; app.querySelectorAll('#col button').forEach(x => x.classList.toggle('on', x === b)); });
-    app.querySelectorAll('.bot').forEach(b => b.onclick = () => { sel = b.dataset.id; app.querySelectorAll('.bot').forEach(x => x.classList.toggle('on', x === b)); });
+    app.querySelectorAll('.bot').forEach(b => b.onclick = () => { sel = b.dataset.id; app.querySelectorAll('.bot').forEach(x => x.classList.toggle('on', x === b)); $('#qpred').innerHTML = predBar('me', sel, true); });
     bindTc(app);
     $('#rated').onchange = e => rated = e.target.checked;
     $('#start').onclick = () => startGame({ bot: League.botById(sel), color: color === 'r' ? (Math.random() < .5 ? 'w' : 'b') : color, mode: 'quick', rated, tc: tcId });
@@ -528,10 +542,11 @@
     const score = result === '1/2-1/2' ? 0.5 : (result === '1-0') === (g.color === 'w') ? 1 : 0;
     let delta = null, summary = null;
     League.snapshotRanks();
+    const preRating = S.player.rating;
     if (g.rated) { delta = League.ratePlayer(g.bot.id, score); }
     League.recordGame(score);
     if (g.mode === 'league') summary = League.completeRound(score);
-    g.record = { id: Date.now(), opp: g.bot.name, oppRating: g.botElo, color: g.color, mode: g.mode, result, reason, score, delta, sans: g.sans, moves: g.moves, date: Date.now() };
+    g.record = { id: Date.now(), opp: g.bot.name, oppRating: g.botElo, myRating: preRating, color: g.color, mode: g.mode, result, reason, score, delta, sans: g.sans, moves: g.moves, date: Date.now() };
     League.addHistory(g.record);
     S = League.state();
     if (silent) return;
