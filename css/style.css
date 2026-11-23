@@ -356,3 +356,4 @@ main#app { overflow-x:clip; }
 .rnd .pred{margin:-2px 8px 8px}
 .pred .wpbar{gap:0!important;padding:0!important;height:8px!important}
 .pred .wpbar span{margin:0!important;padding:0!important;height:8px!important;border-radius:0!important;flex:none}
+.pred.live{margin:6px 0 10px}.pred.live .up{color:#81b64c}.pred.live .down{color:#e0503c}

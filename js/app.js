@@ -404,6 +404,20 @@
     if (G.chess.turn !== color) setTimeout(botMove, 400);
   }
 
+  // Live prediction: pre-game odds (rating + form) shifted by the current position.
+  function livePred(g) {
+    const c = g.chess;
+    let ev = AI.evaluate(c) * (c.turn === g.color ? 1 : -1); // centipawns, your point of view
+    ev = Math.max(-1500, Math.min(1500, ev));
+    const p = League.predict('me', g.bot.id, ev * 1.2, S.player.rating, g.botElo);
+    if (!g.pred0) g.pred0 = p;
+    const d = p.win - g.pred0.win;
+    const trend = !g.sans.length || Math.abs(d) < 2 ? '' : d > 0 ? `<span class="up">▲ ${d}</span>` : `<span class="down">▼ ${-d}</span>`;
+    return `<div class="pred live"><div class="ptitle">Win chance <b>${p.win}%</b> ${trend}<small class="muted"> · started at ${g.pred0.win}%</small></div>
+      <div class="wpbar"><span class="pw" style="width:${p.win}%"></span><span class="pd" style="width:${p.draw}%"></span><span class="pl" style="width:${p.loss}%"></span></div>
+      <div class="plab"><span>You ${p.win}%</span><span>Draw ${p.draw}%</span><span>${esc(g.bot.name)} ${p.loss}%</span></div></div>`;
+  }
+
   function renderGame() {
     const keepScroll = window.scrollY;
     const g = G, c = g.chess, legal = g.over ? [] : c.moves();
@@ -421,6 +435,7 @@
       <div class="boardwrap">${top}${boardHTML(c, { flip: g.color === 'b', sel: g.sel, targets, last, check, arrows: g.assist ? g.assist.arrows : [], tints: g.assist ? g.assist.tints : {} })}${bottom}</div>
       <aside class="card side">
         <h3>${g.mode === 'league' ? `${leagueBadge(S.season.league)} Round ${S.season.round + 1}` : 'Quick match'} <small class="muted">${g.rated ? 'rated' : 'casual'} · ${g.tc.label}</small></h3>
+        ${g.over ? '' : livePred(g)}
         <div class="moves" id="mvs">${moveList || '<p class="muted">Make your move.</p>'}</div>
         <div class="row">${g.over ? `<button class="btn primary" id="rev">Game review</button><button class="btn" id="back">Continue</button>`
           : `<button class="btn" id="draw">½ Offer draw</button><button class="btn danger" id="resign">Resign</button>`}</div>

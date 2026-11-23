@@ -214,9 +214,9 @@
     return Math.max(-120, Math.min(120, Math.round(sum / (n + 2) * 400)));
   }
   // Win / draw / loss chances for a vs b, from ratings adjusted by recent form.
-  function predict(a, b) {
+  function predict(a, b, bonus = 0, rA, rB) {
     const fa = form(a), fb = form(b);
-    const e = expected(rating(a) + fa, rating(b) + fb);
+    const e = expected((rA ?? rating(a)) + fa + bonus, (rB ?? rating(b)) + fb);
     const draw = 0.24 * (1 - Math.min(1, Math.abs(e - 0.5) * 1.8)) + 0.03;
     let win = Math.max(0.01, e - draw / 2), loss = Math.max(0.01, 1 - e - draw / 2);
     const t = win + draw + loss; win /= t; loss /= t;
