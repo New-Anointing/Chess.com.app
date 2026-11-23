@@ -148,7 +148,7 @@
       ${full ? `<div class="ptitle">Prediction: <b>${fav[0]}</b> ${fav[0] === 'You' ? 'have' : 'has'} a ${fav[1]}% chance to win</div>` : ''}
       <div class="wpbar"><span class="pw" style="width:${p.win}%"></span><span class="pd" style="width:${p.draw}%"></span><span class="pl" style="width:${p.loss}%"></span></div>
       <div class="plab"><span>${nm(a)} ${p.win}%</span><span>Draw ${p.draw}%</span><span>${nm(b)} ${p.loss}%</span></div>
-      ${full && (formTxt(p.formA) || formTxt(p.formB)) ? `<div class="pform"><span>${formTxt(p.formA)}</span><span>${formTxt(p.formB)}</span></div>` : ''}
+      ${(formTxt(p.formA) || formTxt(p.formB)) ? `<div class="pform"><span>${formTxt(p.formA)}</span><span>${formTxt(p.formB)}</span></div>` : ''}
     </div>`;
   }
 
@@ -239,14 +239,22 @@
       return `<details class="rnd ${state}" ${state === 'next' || (state === 'done' && r === s.round - 1 && s.round === total) || (r === s.round - 1 && !s.results[s.round]) ? 'open' : ''}>
         <summary><b>Round ${r + 1}</b><span class="muted">${state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
     }).join('');
+    const lastFive = id => {
+      const out = [];
+      for (const round of s.results) for (const g of round) {
+        if (g.bye || (g.a !== id && g.b !== id)) continue;
+        const sc = g.a === id ? g.sc : 1 - g.sc; out.push(sc === 1 ? 'W' : sc === 0 ? 'L' : 'D');
+      }
+      return `<span class="frm">${out.slice(-5).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span>`;
+    };
     const hist = League.history(li).slice().reverse();
     app.innerHTML = `
       <div class="ltabs">${LEAGUES.map((x, i) => `<button class="ltab ${i === li ? 'on' : ''}" data-li="${i}" style="--c:${x.color}">${x.icon} ${x.name}${i === mine ? '<i title="Your league"></i>' : ''}</button>`).join('')}</div>
       <section class="card">
         <div class="row between"><h2>${leagueBadge(li)} Season ${s.num}</h2><span class="muted">${isMine ? 'Your league · ' : ''}Round ${Math.min(s.round + 1, total)} / ${total}</span></div>
         <div class="sprog">${s.rounds.map((_, r) => `<span class="${r < s.round ? 'done' : r === s.round ? 'cur' : ''}"></span>`).join('')}</div>
-        <table class="tbl ltable"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody>
-        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td></tr>`).join('')}
+        <table class="tbl ltable"><thead><tr><th>#</th><th></th><th>Player</th><th>Rtg</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>Form</th></tr></thead><tbody>
+        ${st.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''} ${zone(i)}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${who(r.id)}</td><td>${League.rating(r.id)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td><b>${r.pts}</b></td><td>${lastFive(r.id)}</td></tr>`).join('')}
         </tbody></table>
         <p class="legend"><span class="up">■</span> ${li === LEAGUES.length - 1 ? 'Champion' : `Promotion to ${LEAGUES[li + 1].name}`} ${li > 0 ? `<span class="down">■</span> Relegation to ${LEAGUES[li - 1].name}` : ''} · ▲▼ change since last round</p>
         ${fx ? `<button class="btn primary" id="playLeague">Play round ${s.round + 1} vs ${esc(League.botById(fx.botId).name)}</button>`
