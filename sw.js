@@ -1,6 +1,6 @@
 // Service worker: network-first so new code arrives as soon as the app is opened online,
 // with a cached copy so the app still works offline.
-const CACHE = 'checkmate-arena-v5';
+const CACHE = 'checkmate-arena-v6';
 const FILES = ['./', 'index.html', 'css/style.css', 'js/chess.js', 'js/ai.js', 'js/coach.js', 'js/sound.js', 'js/league.js', 'js/app.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 

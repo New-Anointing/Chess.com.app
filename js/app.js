@@ -310,9 +310,9 @@
   function leaderboard() {
     const lb = League.leaderboard();
     app.innerHTML = `<section class="card"><h2>Global leaderboard</h2>
-      <p class="muted small">▲▼ show how many places each player moved since your last game.</p>
-      <table class="tbl lbt"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th></tr></thead><tbody>
-      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td>${leagueBadge(r.league)}</td><td><b>${r.rating}</b></td></tr>`).join('')}
+      <p class="muted small">▲▼ show how many places each player moved since your last game. Form shows the last 5 results.</p>
+      <table class="tbl lbt"><thead><tr><th>#</th><th></th><th>Player</th><th>League</th><th>Rating</th><th>Form</th></tr></thead><tbody>
+      ${lb.map((r, i) => `<tr class="${r.id === 'me' ? 'me' : ''}"><td>${i + 1}</td><td>${moveTag(r.move)}</td><td class="nm">${r.avatar} ${esc(r.id === 'me' ? 'You' : r.name)}</td><td><span class="badge lbb" style="--c:${LEAGUES[r.league].color}" title="${LEAGUES[r.league].name}">${LEAGUES[r.league].icon}<span class="lbn"> ${LEAGUES[r.league].name}</span></span></td><td><b>${r.rating}</b></td><td><span class="frm">${League.recent(r.id).map(x => `<i class="f${x}">${x}</i>`).join('') || '<small class="muted">–</small>'}</span></td></tr>`).join('')}
       </tbody></table></section>`;
   }
 

@@ -360,3 +360,5 @@ main#app { overflow-x:clip; }
 .frm{display:inline-flex;gap:2px}.frm i{font-style:normal;font-size:10px;font-weight:700;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;color:#fff}
 .frm .fW{background:#4caf50}.frm .fD{background:#8a8f98}.frm .fL{background:#e0503c}
 .ltable{font-size:13px}
+.lbt .frm{white-space:nowrap}
+@media (max-width:600px){.lbt .lbn{display:none}.lbt .badge{padding:2px 6px}.lbt td,.lbt th{padding-left:4px;padding-right:4px}.lbt .frm i{width:13px;height:13px;line-height:13px;font-size:9px}}

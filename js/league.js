@@ -213,6 +213,15 @@
     // shrink small samples toward zero, cap at ±120 points
     return Math.max(-120, Math.min(120, Math.round(sum / (n + 2) * 400)));
   }
+  // Last n results (oldest first) as 'W' / 'D' / 'L'.
+  function recent(id, n = 5) {
+    const ch = sc => sc === 1 ? 'W' : sc === 0 ? 'L' : 'D';
+    if (id === 'me') return S.history.slice(0, n).map(h => ch(h.score)).reverse();
+    const out = [];
+    for (const li in S.seasons) for (const round of S.seasons[li].results) for (const g of round)
+      if (!g.bye && (g.a === id || g.b === id)) out.push(ch(g.a === id ? g.sc : 1 - g.sc));
+    return out.slice(-n);
+  }
   // Win / draw / loss chances for a vs b, from ratings adjusted by recent form.
   function predict(a, b, bonus = 0, rA, rB) {
     const fa = form(a), fb = form(b);
@@ -228,6 +237,6 @@
   function addHistory(g) { S.history.unshift(g); S.history = S.history.slice(0, 40); save(); }
 
   root.League = { LEAGUES, BOTS, botById, load, save, reset, state: () => S, rating, ratePlayer, recordGame,
-    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague, predict, form,
+    nextFixture, completeRound, standings, leaderboard, snapshotRanks, addHistory, expected, botLeague, predict, form, recent,
     season: li => S.seasons[li], members: li => S.members[li], history: li => S.leagueHistory[li] || [] };
 })(typeof window !== 'undefined' ? window : globalThis);
