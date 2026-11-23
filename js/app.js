@@ -254,11 +254,13 @@
       <button class="schip ${past ? '' : 'on'}" data-s="cur">Current (S${League.season(li).num})</button>
       ${allH.slice().reverse().map(h => `<button class="schip ${past && past.season === h.season ? 'on' : ''}" data-s="${h.season}">S${h.season}</button>`).join('')}</div>` : '';
     const zone = i => (i < 2 && li < LEAGUES.length - 1) || (i === 0 && li === LEAGUES.length - 1) ? 'up' : i >= st.length - 2 && li > 0 ? 'down' : '';
+    const pastR = past ? Object.fromEntries(past.table.map(r => [r.id, r.rating])) : null;
+    const rtg = id => { const v = pastR ? pastR[id] : League.rating(id); return v != null ? ` <small class="fxr">${v}</small>` : ''; };
     // rounds: played ones show results, the next one shows fixtures, later ones are muted
     const rounds = s.rounds.map((pairs, r) => {
       const res = s.results[r], state = res ? 'done' : r === s.round ? 'next' : 'later';
       const games = (res || pairs.map(([a, b]) => ({ a, b }))).filter(g => !g.bye && g.a !== 'bye' && g.b !== 'bye').map(g =>
-        `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}</span></div>${res ? '' : predBar(g.a, g.b)}`).join('');
+        `<div class="fx ${g.a === 'me' || g.b === 'me' ? 'mine' : ''}"><span class="l">${who(g.a)}${rtg(g.a)}</span><span class="sc">${res ? score(g.sc) : 'vs'}</span><span class="r">${who(g.b)}${rtg(g.b)}</span></div>${res ? '' : predBar(g.a, g.b)}`).join('');
       return `<details class="rnd ${state}" ${state === 'next' || (state === 'done' && r === s.round - 1 && s.round === total) || (r === s.round - 1 && !s.results[s.round]) ? 'open' : ''}>
         <summary><b>Round ${r + 1}</b><span class="muted">${past ? '' : state === 'done' ? 'Played' : state === 'next' ? 'Up next' : 'Upcoming'}</span></summary>${games}</details>`;
     }).join('');

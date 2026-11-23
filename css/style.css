@@ -369,3 +369,4 @@ main#app { overflow-x:clip; }
 .spick::-webkit-scrollbar{display:none}
 .schip{flex:none;border:1px solid var(--line,rgba(255,255,255,.15));background:transparent;color:inherit;border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
 .schip.on{background:var(--accent);border-color:var(--accent);color:#06121a;font-weight:600}
+.fx .fxr{opacity:.6;font-size:.8em;font-weight:400}
