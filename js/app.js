@@ -825,8 +825,8 @@
         <div class="coachav">${pieceSVG('N')}</div>
         <div class="bubble">
           <div class="bh">${icon}<b>${title}</b><span class="evchip ${chipDark ? 'dark' : ''}">${chip}</span></div>
-          <div class="bbody"><p>${forkTagFlag ? '<span class="forktag">Fork</span>' : ''}${body}</p>
-          ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}</div>
+          <div class="bbody"><p>${forkTagFlag ? '<span class="forktag">Fork</span>' : ''}${body}</p></div>
+          ${!r.retry && !r.bestView && ex && ex.line && d && BAD.includes(d.cls) ? `<p class="line">Best line: ${ex.line.map((x, i) => `<b>${figSan(x, i % 2 ? (d.color === 'w' ? 'b' : 'w') : d.color)}</b>`).join(' ')}</p>` : ''}
         </div>
       </div>
       <div class="evalwrap"><div class="evalbar ${flip ? 'flip' : ''}"><div style="height:${100 - barPct}%"></div><span>${AI.isMate(evNow) ? fmtEval(evNow) : Math.abs(evNow) >= 1000 ? Math.round(Math.abs(evNow) / 100) : (Math.abs(evNow) / 100).toFixed(1)}</span></div>
